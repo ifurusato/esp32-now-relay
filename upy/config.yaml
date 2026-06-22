@@ -1,0 +1,15 @@
+# configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+# Topology configuration for the 5-device ESP-NOW relay chain.
+# The order of this list strictly defines the relay path (Node 1 -> Node 5).
+devices:
+  - name: "Node 1 - TinyS3 w antenna"
+    mac: "dc:54:75:eb:69:c8"
+  - name: "Node 2 - TinyPICO green"
+    mac: "64:b7:08:90:5c:c4"
+  - name: "Node 3 - TinyPICO light green"
+    mac: "24:a1:60:75:ba:84"
+  - name: "Node 4 - TinyPICO red"
+    mac: "98:cd:ac:d3:41:b8"
+  - name: "Node 5 - FeatherS2"
+    mac: "7c:df:a1:03:4d:fe"
