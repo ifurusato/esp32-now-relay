@@ -22,8 +22,8 @@ class MessageFactory(Component):
     A factory for Messages.
     '''
     def __init__(self, message_bus=None, level=Level.INFO):
-        self._log = Logger("msgfactory", level)
-        Component.__init__(self, "msgfactory", suppressed=False, enabled=True, level=level)
+#       self._log = Logger("msg-factory", level)
+        Component.__init__(self, "msg-factory", suppressed=False, enabled=True, level=level)
         if message_bus is None:
             raise ValueError('null message bus argument.')
         elif not isinstance(message_bus, MessageBus):

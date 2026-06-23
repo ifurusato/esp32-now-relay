@@ -52,7 +52,7 @@ class PushButton:
         '''
         if time.ticks_ms() > self._next_call:
             self._next_call = time.ticks_ms() + self._ms_ago
-            self._log.info(Style.BRIGHT + 'debounce handler triggered.')
+            self._log.debug('debounce handler triggered.')
             self._value = not self._value
             if self._value:
                 self._log.info(Style.BRIGHT + 'PUSHBUTTON EVENT: value={}'.format(self._value))
@@ -60,7 +60,7 @@ class PushButton:
                 self._log.info(Style.NORMAL + 'PUSHBUTTON EVENT: value={}'.format(self._value))
             self._call_callback(pin)
         else:
-            self._log.info(Style.DIM + 'debounce handler triggered.')
+            self._log.debug('debounce handler triggered.')
 
     @property
     def value(self):

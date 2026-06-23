@@ -6,25 +6,24 @@
 # see the LICENSE file included as part of this package.
 #
 # author:   Ichiro Furusato
-# created:  2026-06-04
-# modified: 2026-06-22
+# created:  2026-06-21
+# modified: 2026-06-23
 
 import asyncio
 import sys, os, gc, sys
-import network
 import time
-import ubinascii
 
 from colorama import Fore, Style
 from colors import *
 from logger import Logger, Level
 from config_loader import ConfigLoader
-from message import Message
 from message_bus import MessageBus
 from message_factory import MessageFactory
 from event import *
 from relay import Relay
 import yaml
+
+from food_name_generator import FoodNameGenerator  # for testing
 
 # force module reload
 for mod in ['main']:
@@ -43,14 +42,16 @@ log = Logger('main', Level.INFO)
 
 def detect_device_type():
     '''
-    Identifies the specific Unexpected Maker device using firmware machine metadata.
+    Identifies the specific device using firmware machine metadata.
+
+    sys.implementation._machine returns strings like:
+
+       'TinyPICO with ESP32'
+       'FeatherS2 with ESP32S2'
+       'TinyS3 with ESP32S3' or 'UM TinyS3 with ESP32S3'
+
     '''
-    # sys.implementation._machine returns strings like:
-    # 'TinyPICO with ESP32'
-    # 'FeatherS2 with ESP32S2'
-    # 'TinyS3 with ESP32S3' or 'UM TinyS3 with ESP32S3'
-    
-    # Safely convert to lowercase to handle any variations in firmware versions
+    # safely convert to lowercase to handle any variations in firmware versions
     machine_info = sys.implementation._machine.lower()
     if "tinypico" in machine_info:
         return "TinyPICO"
@@ -61,13 +62,6 @@ def detect_device_type():
     else:
         # fallback to checking the underlying chip generation if the device manufacturer altered the string
         return "unknown device (platform info: {})".format(sys.implementation._machine)
-
-def mac_to_bytes(mac_str):
-    '''
-    Converts a colon-separated hex MAC string into a bytes object.
-    '''
-    clean_hex = mac_str.replace(':', '')
-    return ubinascii.unhexlify(clean_hex)
 
 def pre_blink():
     for i in range(START_COUNT):
@@ -116,19 +110,22 @@ def receive_message(message):
     global _send_time_ms
     rtt_ms = time.ticks_diff(time.ticks_ms(), _send_time_ms)
     _send_time_ms = None
-    log.info("🌸 round trip time: {} ms on message: {}".format(rtt_ms, message))
+    _value = message.value
+    log.info("round trip: {}ms elapsed on message: {}".format(rtt_ms, message))
+    log.info(Fore.WHITE + "received message: '{}'".format(_value))
 
 def send_message(value):
-    print('🌸 send message: {}'.format(value))
+    log.info('sending message…')
     global _send_time_ms
     if _downstream_mac:
         _send_time_ms = time.ticks_ms()
-        log.info("first node detected; sending initialization payload downstream.")
-        _message = _message_factory.create_message(event=RELAY, value='message content')
+        _value = FoodNameGenerator.generate()
+        log.info(Fore.WHITE + "sending message '{}'…".format(_value))
+        _message = _message_factory.create_message(event=RELAY, value=_value)
         # set callback to receive inbound message
         _relay_node.set_receive_callback(receive_message)
         # send outbound (direction=1) down the chain
-        _relay_node.send_message_obj(_downstream_mac, 1, _message)
+        _relay_node.send_message(_downstream_mac, 1, _message)
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -145,82 +142,22 @@ try:
     pre_blink()
     print_sysinfo()
 
-    # 1. determine local MAC address
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    local_mac_bytes = wlan.config('mac')
-    local_mac_str = ubinascii.hexlify(local_mac_bytes, ':').decode('utf-8')
-    log.info("booting device; local MAC: {}".format(local_mac_str))
-
-    # 2. load and parse the topology catalog
     config = ConfigLoader.configure('config.yaml')
-    device_list = config.get('devices', [])
-    total_devices = len(device_list)
-    log.info("loaded configuration for {} devices.".format(total_devices))
-
-    # 3. find this device's position in the catalog
-    my_index = None
-    for i, device in enumerate(device_list):
-        if device.get('mac').lower() == local_mac_str.lower():
-            my_index = i
-            break
-    if my_index is None:
-        pixel.show_color(COLOR_RED)
-        raise Exception("local MAC address not found in topology catalog.")
-    else:
-        pixel.show_color(COLOR_GREEN)
-        log.info('this device identified as: ' 
-                + Fore.GREEN + '{}'.format(device_list[my_index].get('name')))
-
-    time.sleep(3)
-    pixel.show_color(COLOR_BLACK)
-
-    # 4. build neighbor routing maps
-    is_endpoint = False
-    if my_index > 0:
-        _upstream_mac = mac_to_bytes(device_list[my_index - 1].get('mac'))
-    if my_index < (total_devices - 1):
-        _downstream_mac = mac_to_bytes(device_list[my_index + 1].get('mac'))
-    else:
-        is_endpoint = True
-
-    # 5. log resolved neighbor names and device operational role
-    upstream_name = "None"
-    downstream_name = "None"
-    if my_index > 0:
-        upstream_name = device_list[my_index - 1].get('name')
-    if my_index < (total_devices - 1):
-        downstream_name = device_list[my_index + 1].get('name')
-    # determine role label for console output
-    if my_index == 0:
-
-        from push_button import PushButton
-
-        button = PushButton(5, send_message)
-        role_label = "INITIATOR"
-    elif is_endpoint:
-        role_label = "ENDPOINT"
-    else:
-        role_label = "RELAY NODE"
-    log.info("topology routing resolved:")
-    log.info("  ├─ Role:       {}".format(role_label))
-    log.info("  ├─ Upstream:   {}".format(upstream_name))
-    log.info("  └─ Downstream: {}".format(downstream_name))
-
-    # 5. initialize the Relay instance with injected factory and routing maps
     _relay_node = Relay(
+        config=config,
         message_factory=_message_factory,
-        pixel=pixel,
-        upstream_mac=_upstream_mac,
-        downstream_mac=_downstream_mac,
-        is_endpoint=is_endpoint
+        pixel=pixel
     )
+    if _relay_node.index == 0:
+        from push_button import PushButton
+        button = PushButton(5, send_message)
+    _upstream_mac   = _relay_node.upstream_mac
+    _downstream_mac = _relay_node.downstream_mac
 
-    # 7. execution processing via asyncio
-    log.info("scheduling relay engine task and starting event loop.")
-    # schedule the relay node background worker
+    # execution processing via asyncio
+    log.info("scheduling relay task and starting event loop…")
     asyncio.create_task(_relay_node.run_loop())
-    # schedule MessageBus background tasks here as well
+    # schedule MessageBus background tasks in the future
     # asyncio.create_task(message_bus.start())
     # keep the main thread alive or run the main loop hook
     asyncio.get_event_loop().run_forever()

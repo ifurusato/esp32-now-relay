@@ -60,7 +60,7 @@ class Message:
         return time.ticks_diff(time.ticks_ms(), self._timestamp)
 
     def __repr__(self):
-        return 'Message[id={}, event={}, age={}ms]'.format(
-                self._id, self._event.label, self.age_ms)
+        return 'Message[id={}, event={}, value={}, age={}ms]'.format(
+                self._id, self._event.label, self.value, self.age_ms)
 
 #EOF

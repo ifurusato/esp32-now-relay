@@ -21,7 +21,7 @@ class MessageBus:
     :param level: the logging level
     '''
     def __init__(self, level=Level.INFO):
-        self._log         = Logger('bus', level)
+        self._log         = Logger('msg-bus', level)
         self._queue       = []
         self._subscribers = []
         self._enabled     = False
