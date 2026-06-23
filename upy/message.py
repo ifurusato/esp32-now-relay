@@ -7,11 +7,10 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-03-10
-# modified: 2026-06-04
+# modified: 2026-06-23
 
 import time
-
-_counter = 0
+from uuid import UUID, uuid4
 
 class Message:
     '''
@@ -24,14 +23,12 @@ class Message:
     :param value:  the optional value payload
     '''
     def __init__(self, event, value=None):
-        global _counter
         if event is None:
             raise ValueError('null event argument.')
         self._event     = event
         self._value     = value
         self._timestamp = time.ticks_ms()
-        self._id        = _counter
-        _counter       += 1
+        self._id        = uuid4()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -60,7 +57,7 @@ class Message:
         return time.ticks_diff(time.ticks_ms(), self._timestamp)
 
     def __repr__(self):
-        return 'Message[id={}, event={}, value={}, age={}ms]'.format(
+        return 'Message[\n  id={},\n  event={},\n  value={},\n  age={}ms\n]'.format(
                 self._id, self._event.label, self.value, self.age_ms)
 
 #EOF

@@ -20,3 +20,6 @@ relay:
     - name:        "Node 5 - FeatherS2"
       mac:         "7c:df:a1:03:4d:fe"
       enabled:      True
+initiator:
+  pin:             5
+

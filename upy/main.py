@@ -21,9 +21,6 @@ from message_bus import MessageBus
 from message_factory import MessageFactory
 from event import *
 from relay import Relay
-import yaml
-
-from food_name_generator import FoodNameGenerator  # for testing
 
 # force module reload
 for mod in ['main']:
@@ -64,6 +61,9 @@ def detect_device_type():
         return "unknown device (platform info: {})".format(sys.implementation._machine)
 
 def pre_blink():
+    '''
+    Blinks the LED three times, giving you enough time to interrupt booting the OS.
+    '''
     for i in range(START_COUNT):
         log.info('[{}/{}] starting…'.format(i + 1, START_COUNT))
         pixel.show_color(COLOR_DARK_CYAN)
@@ -85,6 +85,7 @@ def print_sysinfo():
 def identify_device_type():
     '''
     Identifies the type of device and loads the supporting pixel class.
+    This is done right at the beginning so we have a pixel to work with.
     '''
     global pixel
     device_type = detect_device_type()
@@ -106,32 +107,8 @@ def identify_device_type():
     else:
         log.info('device identified as: ' + Fore.GREEN + device_type)
 
-def receive_message(message):
-    global _send_time_ms
-    rtt_ms = time.ticks_diff(time.ticks_ms(), _send_time_ms)
-    _send_time_ms = None
-    _value = message.value
-    log.info("round trip: {}ms elapsed on message: {}".format(rtt_ms, message))
-    log.info(Fore.WHITE + "received message: '{}'".format(_value))
-
-def send_message(value):
-    log.info('sending message…')
-    global _send_time_ms
-    if _downstream_mac:
-        _send_time_ms = time.ticks_ms()
-        _value = FoodNameGenerator.generate()
-        log.info(Fore.WHITE + "sending message '{}'…".format(_value))
-        _message = _message_factory.create_message(event=RELAY, value=_value)
-        # set callback to receive inbound message
-        _relay_node.set_receive_callback(receive_message)
-        # send outbound (direction=1) down the chain
-        _relay_node.send_message(_downstream_mac, 1, _message)
-
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-_send_time_ms    = None
-_upstream_mac    = None
-_downstream_mac  = None
 _message_bus     = MessageBus()
 _message_factory = MessageFactory(_message_bus)
 _relay_node      = None
@@ -148,11 +125,6 @@ try:
         message_factory=_message_factory,
         pixel=pixel
     )
-    if _relay_node.index == 0:
-        from push_button import PushButton
-        button = PushButton(5, send_message)
-    _upstream_mac   = _relay_node.upstream_mac
-    _downstream_mac = _relay_node.downstream_mac
 
     # execution processing via asyncio
     log.info("scheduling relay task and starting event loop…")

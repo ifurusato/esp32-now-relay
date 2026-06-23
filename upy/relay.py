@@ -32,7 +32,8 @@ class Relay(Component):
         self._message_factory = message_factory
         self._pixel = pixel
         # load device list from configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _cfg = config['relay']
+        self._config = config
+        _cfg = self._config['relay']
         self._verbose = _cfg['verbose']
         self._log.info("verbose: {}".format(self._verbose))
         self._device_list = _cfg.get('devices', [])
@@ -63,6 +64,10 @@ class Relay(Component):
         self._downstream_mac = None
         self._is_endpoint    = False
         self._build_routing_map()
+        # if this is first node, set up Initiator ┈┈┈┈┈┈┈┈┈┈
+        self._initiator = None
+        if self._index == 0:
+            self._establish_initiator()
         # set up ESP32-NOW ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._espnow = espnow.ESPNow()
         self._espnow.active(True)
@@ -99,6 +104,16 @@ class Relay(Component):
         Return the MAC address of the downstream device in the relay.
         '''
         return self._downstream_mac
+
+    def _establish_initiator(self):
+        '''
+        Set up push button to trigger messages.
+        '''
+        self._log.info("establishing initiator…")
+
+        from initiator import Initiator
+
+        self._initiator = Initiator(self._config, self)
 
     def _build_routing_map(self):
         '''

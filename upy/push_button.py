@@ -55,9 +55,9 @@ class PushButton:
             self._log.debug('debounce handler triggered.')
             self._value = not self._value
             if self._value:
-                self._log.info(Style.BRIGHT + 'PUSHBUTTON EVENT: value={}'.format(self._value))
+                self._log.info(Style.BRIGHT + 'pushbutton event: value={}'.format(self._value))
             else:
-                self._log.info(Style.NORMAL + 'PUSHBUTTON EVENT: value={}'.format(self._value))
+                self._log.info(Style.NORMAL + 'pushbutton event: value={}'.format(self._value))
             self._call_callback(pin)
         else:
             self._log.debug('debounce handler triggered.')
