@@ -3,7 +3,7 @@ esp32-now-replay: A multi-node relay based on ESP32-NOW
 *******************************************************
 
 This provides a means of interconnecting a configured relay of ESP32
-evices via ESP32-NOW, so that messages may be sent back and forth 
+devices via ESP32-NOW, so that messages may be sent back and forth 
 across the relay.
 
 
@@ -11,8 +11,18 @@ Features
 --------
 
 * provides a script to obtain the MAC address of a device
-* YAML configuration
+* uses a YAML configuration for device name, MAC address and enabled/disabled state
 * each device determines its own placement in the relay
+* messages passed contain a UUID, payload and age marker
+
+
+Future Work
+-----------
+
+* Integrate Relay into existing asyncio MessageBus architecture so that each 
+  Relay node becomes part of a network-distributed pub-sub system. Publishers 
+  and Subscribers will be able to utilise the Relay for message passing between
+  nodes.
 
 
 Installation
@@ -20,6 +30,10 @@ Installation
 
 First, install the software on all devices. These must be ESP32 versions
 that support ESP32-NOW.
+
+
+Configuration
+-------------
 
 Execute get_mac.py on each device to determine its MAC address.
 
@@ -29,11 +43,37 @@ the last is the endpoint node, and the rest are relay nodes. Copy the
 properly configured config.yaml file to each of the nodes.
 
 
+Usage
+-----
+
+Once the files and configuration are complete, all the devices should be
+reset. Each will start with three cyan blue flashes followed by a steady
+blue. This indicates the Relay is ready. A pushbutton connected between
+IO5 and ground of the initiator will trigger a message onto the bus. It
+will travel to the endpoint, be processed and return to the initiator
+node. The LEDs on all devices will change color momentarily to indicate
+status.
+
+
 Requirements
 ------------
 
-This has been tested on MicroPython v1.25.0 and should work on any newer
-versions.
+This has been tested on MicroPython v1.25.0 and v1.28.0 and should work on 
+any newer versions.
+
+This should work on all ESP32 boards that support ESP32-NOW, including
+but not limited to ESP32-DOWD, ESP32-S2, ESP32-S3, ESP32-C2/C3/C6/H2.
+
+This has so far been successfully tested on:
+
+* Unexpected Maker TinyPICO
+* Unexpected Maker TinyS3
+* Unexpected Maker Feather S2
+* Waveshare ESP32-S3 Zero
+
+The only real issue in implementing for a new board is support for the RGB LED,
+which comes down to whether it's a NeoPixel (WS2812B) or a Dotstar (APA102. A
+new wrapper class is created for the device and main.py modified to handle it.
 
 
 Files
@@ -42,7 +82,7 @@ Files
 * yaml.py:              The YAML parser
 * config_loader.py:     A convenient application configuration loader
 * config.yaml:          YAML configuration file (must be modified)
-* ...
+* TODO...
 
 
 Status

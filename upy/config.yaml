@@ -8,9 +8,12 @@ relay:
     - name:        "Node 1 - TinyS3 w antenna"
       mac:         "dc:54:75:eb:69:c8"
       enabled:      True
-    - name:        "Node 2 - TinyPICO green"
-      mac:         "64:b7:08:90:5c:c4"
-      enabled:      False
+#   - name:        "Node 2 - TinyPICO green"
+#     mac:         "64:b7:08:90:5c:c4"
+#     enabled:      True
+    - name:        "Node 2 - Waveshare ESP32-S3 Zero"
+      mac:         "50:78:7d:17:fe:d8"
+      enabled:      True
     - name:        "Node 3 - TinyPICO light green"
       mac:         "24:a1:60:75:ba:84"
       enabled:      True
@@ -20,6 +23,7 @@ relay:
     - name:        "Node 5 - FeatherS2"
       mac:         "7c:df:a1:03:4d:fe"
       enabled:      True
+
 initiator:
   pin:             5
 

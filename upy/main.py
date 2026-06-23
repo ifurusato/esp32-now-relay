@@ -56,7 +56,10 @@ def detect_device_type():
         return "FeatherS2"
     elif "tinys3" in machine_info:
         return "TinyS3"
+    elif "generic esp32s3" in machine_info:
+        return "ESP32S3Zero"
     else:
+        print('machine info: {}'.format(machine_info))
         # fallback to checking the underlying chip generation if the device manufacturer altered the string
         return "unknown device (platform info: {})".format(sys.implementation._machine)
 
@@ -104,6 +107,12 @@ def identify_device_type():
         pixel = FeatherPixel()
         # FeatherS2 uses an APA102 on pins 40, 39 and has unique LDO control
         log.info('device identified as: ' + Fore.GREEN + 'UM FeatherS2')
+
+    elif device_type == "ESP32S3Zero":
+        from zero_pixel import ZeroPixel
+        pixel = ZeroPixel()
+        # we're dangerously assuming a generic ESP32-S3 is a Waveshare ESP32-S3 Zero
+        log.info('device identified as: ' + Fore.GREEN + 'Waveshare ESP32-S3 Zero ')
     else:
         log.info('device identified as: ' + Fore.GREEN + device_type)
 
@@ -140,6 +149,7 @@ except Exception as e:
     log.error('{} raised: {}'.format(type(e), e))
     sys.print_exception(e)
 finally:
-    pixel.close()
+    if pixel:
+        pixel.close()
 
 #EOF
