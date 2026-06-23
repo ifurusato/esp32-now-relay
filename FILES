@@ -1,0 +1,42 @@
+FILES
+
+# relay .................
+main.py                 # main application executor
+relay.py                # relay support
+
+# message bus ...........
+event.py                # event types
+message_bus.py          # asyncio message bus
+message_factory.py      # factory for messages
+message.py              # message class
+initiator.py            # uses pushbutton to send message
+
+configuration ...........
+config_error.py         # exception class
+config.yaml             # YAML application/network configuration
+config_loader.py        # loads YAML file
+
+infrastructure ..........
+component.py            # component superclass
+component_registry.py   # registry of component instances
+logger.py               # logging support
+
+pixel support ...........
+neopixel.py             # copy of common NeoPixel class
+pico_pixel.py           # pixel support for the UM TinyPICO
+pixel.py                # wrapper class for pixel support
+feather_pixel.py        # pixel support for the UM Feather S2
+s3_pixel.py             # pixel support for the UM TinyS3
+zero_pixel.py           # pixel support for the Waveshare ESP32-S3 Zero
+
+testing .................
+food_name_generator.py  # generates random names of foods
+push_button.py          # supports a debounced push button
+
+utility/support .........
+colorama.py             # cheap version of colorama for console messages
+colors.py               # pseudo-enum of colors
+identify.py             # script to obtain MAC address and machine identifier
+uuid.py                 # generates type 4 UUIDs
+yaml.py                 # YAML file reader
+

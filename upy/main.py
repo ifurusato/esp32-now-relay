@@ -56,10 +56,7 @@ def detect_device_type():
         return "FeatherS2"
     elif "tinys3" in machine_info:
         return "TinyS3"
-    elif "generic esp32s3" in machine_info:
-        return "ESP32S3Zero"
     else:
-        print('machine info: {}'.format(machine_info))
         # fallback to checking the underlying chip generation if the device manufacturer altered the string
         return "unknown device (platform info: {})".format(sys.implementation._machine)
 
@@ -89,6 +86,10 @@ def identify_device_type():
     '''
     Identifies the type of device and loads the supporting pixel class.
     This is done right at the beginning so we have a pixel to work with.
+
+    If no device is recognised, the 'pixel' variable remains as None.
+    This is not an error condition but there will be no RGB LED activity
+    on that device.
     '''
     global pixel
     device_type = detect_device_type()
@@ -107,12 +108,6 @@ def identify_device_type():
         pixel = FeatherPixel()
         # FeatherS2 uses an APA102 on pins 40, 39 and has unique LDO control
         log.info('device identified as: ' + Fore.GREEN + 'UM FeatherS2')
-
-    elif device_type == "ESP32S3Zero":
-        from zero_pixel import ZeroPixel
-        pixel = ZeroPixel()
-        # we're dangerously assuming a generic ESP32-S3 is a Waveshare ESP32-S3 Zero
-        log.info('device identified as: ' + Fore.GREEN + 'Waveshare ESP32-S3 Zero ')
     else:
         log.info('device identified as: ' + Fore.GREEN + device_type)
 
@@ -149,7 +144,6 @@ except Exception as e:
     log.error('{} raised: {}'.format(type(e), e))
     sys.print_exception(e)
 finally:
-    if pixel:
-        pixel.close()
+    pixel.close()
 
 #EOF

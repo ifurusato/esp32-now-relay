@@ -35,31 +35,40 @@ that support ESP32-NOW.
 Configuration
 -------------
 
-Execute get_mac.py on each device to determine its MAC address.
+Execute identify.py on each device to determine its MAC address and machine
+identifier.
 
 Edit the config.yaml file to contain the number of devices, including the
-MAC address of each. The first device in the list is the initiator node,
-the last is the endpoint node, and the rest are relay nodes. Copy the
-properly configured config.yaml file to each of the nodes.
+MAC address of each. The 'name' value is anything that is helpful to identify
+the device amongst others. 
+
+The first device in the list is the initiator node, the last is the endpoint 
+node, and the rest are relay nodes. Copy the properly configured config.yaml 
+file to each of the nodes.
+
+If there is no corresponding machine identifier in main.py, no RGB LED pixel
+class will be assigned, and there will be no visual indication of activity.
 
 
 Usage
 -----
 
 Once the files and configuration are complete, all the devices should be
-reset. Each will start with three cyan blue flashes followed by a steady
+reset. Each will start with three light blue flashes followed by a steady
 blue. This indicates the Relay is ready. A pushbutton connected between
-IO5 and ground of the initiator will trigger a message onto the bus. It
-will travel to the endpoint, be processed and return to the initiator
-node. The LEDs on all devices will change color momentarily to indicate
-status.
+IO5 and ground of the initiator node will trigger a message onto the bus.
+
+The message will travel to the endpoint, be processed and return to the 
+initiator node. The LEDs on all devices will change color momentarily to 
+indicate status. The message is reversed by the endpoint node, so the
+value as returned will reflect that change.
 
 
 Requirements
 ------------
 
-This has been tested on MicroPython v1.25.0 and v1.28.0 and should work on 
-any newer versions.
+This has been tested with MicroPython v1.25.0 and v1.28.0 and should work 
+on any newer version.
 
 This should work on all ESP32 boards that support ESP32-NOW, including
 but not limited to ESP32-DOWD, ESP32-S2, ESP32-S3, ESP32-C2/C3/C6/H2.
@@ -79,10 +88,7 @@ new wrapper class is created for the device and main.py modified to handle it.
 Files
 -----
 
-* yaml.py:              The YAML parser
-* config_loader.py:     A convenient application configuration loader
-* config.yaml:          YAML configuration file (must be modified)
-* TODO...
+See FILES for a list and description of project files.
 
 
 Status
