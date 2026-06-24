@@ -26,8 +26,8 @@ class ConfigLoader:
     DEFAULT_FILE = 'config.yaml'
 
     @staticmethod
-    def configure(filename=None):
+    def configure(filename=None, suppress_error_message=False):
         path = filename or ConfigLoader.DEFAULT_FILE
-        return yaml.load(path)
+        return yaml.load(path, suppress_error_message)
 
 #EOF

@@ -87,7 +87,7 @@ class Logger:
                     + Logger.__color_info + "{} : ".format(self.__INFO_TOKEN)
                     + Fore.CYAN + "{}".format(message) + Logger.__color_reset)
 
-    def warning(self, message):
+    def warn(self, message):
         if self.is_at_least(Level.WARN):
             timestamp = self._get_time()
             print(Fore.BLUE + "{} : ".format(timestamp)

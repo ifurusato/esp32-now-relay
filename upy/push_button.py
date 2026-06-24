@@ -9,6 +9,7 @@
 # created:  2025-11-23
 # modified: 2026-06-22
 
+import sys
 import time
 from machine import Pin
 from colorama import Fore, Style
@@ -43,6 +44,7 @@ class PushButton:
                 self._callback(pin)
             except Exception as e:
                 self._log.error('{} raised executing callback: {}'.format(type(e), e))
+                sys.print_exception(e)
         else:
             self._log.warn('no callback available.')
 
@@ -55,9 +57,9 @@ class PushButton:
             self._log.debug('debounce handler triggered.')
             self._value = not self._value
             if self._value:
-                self._log.info(Style.BRIGHT + 'pushbutton event: value={}'.format(self._value))
+                self._log.info('pushbutton event.')
             else:
-                self._log.info(Style.NORMAL + 'pushbutton event: value={}'.format(self._value))
+                self._log.debug('pushbutton event false.')
             self._call_callback(pin)
         else:
             self._log.debug('debounce handler triggered.')

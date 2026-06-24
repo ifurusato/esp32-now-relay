@@ -25,16 +25,20 @@ class Message:
     def __init__(self, event, value=None):
         if event is None:
             raise ValueError('null event argument.')
+        self._id        = uuid4()
         self._event     = event
         self._value     = value
         self._timestamp = time.ticks_ms()
-        self._id        = uuid4()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def id(self):
         return self._id
+
+    @id.setter
+    def id(self, value):
+        self._id = value
 
     @property
     def event(self):
@@ -51,6 +55,10 @@ class Message:
     @property
     def timestamp(self):
         return self._timestamp
+
+    @timestamp.setter
+    def timestamp(self, timestamp):
+        self._timestamp = timestamp
 
     @property
     def age_ms(self):

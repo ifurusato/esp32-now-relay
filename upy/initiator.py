@@ -32,8 +32,8 @@ class Initiator(Component):
         _button_pin = _cfg['pin'] # IO5
         self._button = PushButton(_button_pin, self._send_message)
         # post-topological initialization properties
-        self._upstream_mac = self._relay_node.upstream_mac
-        self._downstream_mac = self._relay_node.downstream_mac
+        self._upstream_mac_bytes = self._relay_node.upstream_mac_bytes
+        self._downstream_mac_bytes = self._relay_node.downstream_mac_bytes
         self._log.info('ready.')
 
     def receive_message(self, message):
@@ -42,7 +42,10 @@ class Initiator(Component):
             self._send_time_ms = None
             value = message.value
             self._log.info("round trip: {}ms elapsed on message:\n{}{}".format(rtt_ms, Fore.WHITE, message))
-            self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(value))
+            if message.event is FAILURE:
+                self._log.info("inbound message indicates error: " + Fore.RED + "'{}'".format(value))
+            else:
+                self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(value))
 
     def _send_message(self, arg=None):
         '''
@@ -57,13 +60,13 @@ class Initiator(Component):
         Initiates sending a message onto the relay.
         '''
         self._log.info("sending message '{}'…".format(value))
-        if self._downstream_mac:
+        if self._downstream_mac_bytes:
             self._send_time_ms = time.ticks_ms()
-            self._log.info("outbound message: " + Fore.GREEN + "'{}'…".format(value))
+            self._log.info("outbound message: " + Fore.GREEN + "'{}'".format(value))
             message = self._relay_node._message_factory.create_message(event=RELAY, value=value)
             # set callback to receive inbound message
             self._relay_node.set_receive_callback(self.receive_message)
             # send outbound (direction=1) down the chain
-            self._relay_node.send_message(self._downstream_mac, 1, message)
+            self._relay_node.send_message(self._downstream_mac_bytes, 1, message)
 
 #EOF

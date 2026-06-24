@@ -10,9 +10,13 @@
 # modified: 2026-06-04
 
 import asyncio
-from logger import Logger, Level
+from colorama import Fore, Style
 
-class MessageBus:
+from logger import Logger, Level
+from component import Component
+
+class MessageBus(Component):
+    NAME = 'msg-bus'
     '''
     A simplified asynchronous message bus. Messages are published synchronously
     to a list-backed FIFO queue and consumed asynchronously, delivering each
@@ -21,7 +25,7 @@ class MessageBus:
     :param level: the logging level
     '''
     def __init__(self, level=Level.INFO):
-        self._log         = Logger('msg-bus', level)
+        Component.__init__(self, MessageBus.NAME, suppressed=False, enabled=False)
         self._queue       = []
         self._subscribers = []
         self._enabled     = False
@@ -54,24 +58,33 @@ class MessageBus:
     def queue_empty(self):
         return len(self._queue) == 0
 
-    def enable(self):
-        self._enabled = True
-        self._log.info('enabled.')
-
-    def disable(self):
-        self._enabled = False
-        self._log.info('disabled.')
-
     def close(self):
-        self._enabled = False
+        super().close()
 
-    async def consume_loop(self):
+    def enable(self):
+        '''
+        Enable the message bus and start the processing loop.
+        This call will block until disable() is called.
+        '''
+        if not self.closed and not self.enabled:
+            super().enable()
+            self._log.debug('starting message bus loop…')
+            try:
+                asyncio.run(self._start_consuming())
+            except KeyboardInterrupt:
+                self._log.info('interrupted via keyboard.')
+            finally:
+                self.disable()
+        else:
+            self._log.warn('already enabled or closed.')
+
+    async def _start_consuming(self):
         '''
         Async consume loop: dequeues messages and delivers to all enabled,
-        accepting subscribers. Start as a task from within an async context.
+        accepting subscribers.
         '''
-        self._log.info('consume loop started.')
-        while self._enabled:
+        self._log.info(Fore.GREEN + 'message bus loop started.')
+        while self.enabled:
             if self._queue:
                 _message = self._queue.pop(0)
                 for _subscriber in self._subscribers:
@@ -79,6 +92,21 @@ class MessageBus:
                         await _subscriber.process_message(_message)
             else:
                 await asyncio.sleep_ms(10)
-        self._log.info('consume loop ended.')
+        self._log.info('message bus loop ended.')
+
+    def disable(self):
+        '''
+        Disable the message bus, clearing the queue and shutting down loops.
+        '''
+        if not self.enabled:
+            self._log.warn('already disabled.')
+        else:
+            self._log.info('disabling…')
+            self.clear_queue()
+            super().disable()
+
+    def close(self):
+        self._closed = True
+        self.disable()
 
 #EOF

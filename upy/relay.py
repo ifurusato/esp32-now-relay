@@ -9,9 +9,8 @@
 # created:  2026-06-22
 # modified: 2026-06-23
 
+import sys
 import asyncio
-import network
-import espnow
 import time
 import ubinascii
 
@@ -19,70 +18,72 @@ from colorama import Fore, Style
 from colors import *
 from event import *
 from component import Component
+from logger import Logger, Level
 from config_error import ConfigurationError
+from message_codec import MessageCodec
 
 class Relay(Component):
     NAME = 'relay'
 
-    def __init__(self, config=None, message_factory=None, pixel=None):
+    def __init__(self, config=None, networking=None, message_bus=None, message_factory=None, pixel=None, level=Level.INFO):
         '''
         Initializes network interfaces and injects the centralized message factory.
         '''
-        Component.__init__(self, Relay.NAME, suppressed=False, enabled=True)
+        Component.__init__(self, Relay.NAME, suppressed=False, enabled=False, level=level)
+        self._config          = config
+        self._networking      = networking
+        self._message_bus     = message_bus
         self._message_factory = message_factory
+        self._message_codec   = MessageCodec(message_factory, level)
         self._pixel = pixel
         # load device list from configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._config = config
         _cfg = self._config['relay']
         self._verbose = _cfg['verbose']
-        self._log.info("verbose: {}".format(self._verbose))
-        self._device_list = _cfg.get('devices', [])
+        self._device_list = _cfg['devices']
         self._total_devices = len(self._device_list)
         self._log.info('loaded configuration for:   ' + Fore.GREEN + '{} devices.'.format(self._total_devices))
-        # establish network ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._wlan = network.WLAN(network.STA_IF)
-        self._wlan.active(True)
-        # determine local MAC address ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _local_mac_bytes = self._wlan.config('mac')
-        self._local_mac_str = ubinascii.hexlify(_local_mac_bytes, ':').decode('utf-8')
-        self._log.info('booting device MAC address: ' + Fore.GREEN + '{}'.format(self._local_mac_str))
-        # find this device's position in catalog ┈┈┈┈┈┈┈┈┈┈┈
-        self._index = None # index of this device
-        for i, device in enumerate(self._device_list):
-            if device.get('mac').lower() == self._local_mac_str.lower():
-                self._index = i
-                break
+        self._local_mac_str = self._networking.mac_address
+        self.print_configuration()
+        self._log.info('device MAC address: ' + Fore.GREEN + '{}'.format(self._local_mac_str))
+#       # find this device's position in catalog ┈┈┈┈┈┈┈┈┈┈┈
+        self._index, local_device = Relay.find_device_by_mac(self._device_list, self._local_mac_str)
         if self._index is None:
-            self._pixel.show_color(COLOR_RED)
+            self._show_color(COLOR_RED)
             raise ConfigurationError("local MAC address '{}' not found in topology catalog.".format(self._local_mac_str))
         else:
-            self._pixel.show_color(COLOR_DEEP_CYAN)
+            self._show_color(COLOR_DEEP_CYAN)
             self._log.info('this device identified as:  '
                     + Fore.GREEN + '{}'.format(self._device_list[self._index].get('name')))
+        # set up ESP32-NOW ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._espnow = self._networking.espnow
+        self._rx_callback    = None
+        self._led_task       = None
+        # set up encryption ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._encryption_enabled = False
+        if _cfg['encryption' ] is True:
+            self._load_encryption_keys()
+        else:
+            self._log.info('using open transport.')
         # configure relay routing map ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._upstream_mac   = None
-        self._downstream_mac = None
-        self._is_endpoint    = False
-        self._build_routing_map()
+        self._upstream_name        = None
+        self._downstream_name      = None
+        self._upstream_mac_bytes   = None
+        self._downstream_mac_bytes = None
+        self._upstream_mac         = None # human-readable MAC address
+        self._downstream_mac       = None # human-readable MAC address
+        self._is_endpoint          = False
+        self._seen_errors          = []
+        _enabled = self._build_routing_map()
+        if not _enabled:
+            self.disable()
         # if this is first node, set up Initiator ┈┈┈┈┈┈┈┈┈┈
         self._initiator = None
         if self._index == 0:
             self._establish_initiator()
-        # set up ESP32-NOW ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._espnow = espnow.ESPNow()
-        self._espnow.active(True)
-        self._espnow.config(timeout_ms=10)
-        self._rx_callback    = None
-        self._led_task       = None
-        # register peers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        if self._upstream_mac:
-            self._espnow.add_peer(self._upstream_mac)
-        if self._downstream_mac:
-            self._espnow.add_peer(self._downstream_mac)
         if self.enabled:
-            self._log.info(Fore.GREEN + 'ready.')
+            self._log.info('ready.')
         else:
-            self._log.info(Fore.RED + 'disabled.')
+            self._log.info('ready in disabled state.')
 
     @property
     def index(self):
@@ -94,16 +95,95 @@ class Relay(Component):
     @property
     def upstream_mac(self):
         '''
-        Return the MAC address of the upstream device in the relay.
+        Return the MAC address of the upstream device in the relay as a human-readable string.
+
+        This can be converted to a bytes object via mac_to_bytes().
         '''
         return self._upstream_mac
 
     @property
+    def upstream_mac_bytes(self):
+        '''
+        Return the MAC address of the upstream device in the relay.
+        '''
+        return self._upstream_mac_bytes
+
+    @property
     def downstream_mac(self):
+        '''
+        Return the MAC address of the downstream device in the relay as a human-readable string.
+
+        This can be converted to a bytes object via mac_to_bytes().
+        '''
+        return self._downstream_mac
+
+    @property
+    def downstream_mac_bytes(self):
         '''
         Return the MAC address of the downstream device in the relay.
         '''
-        return self._downstream_mac
+        return self._downstream_mac_bytes
+
+    def enable(self):
+        '''
+        Enable the relay by scheduling its execution loop.
+        '''
+        if self.closed:
+            self._log.warn('already closed.')
+        elif not self.enabled:
+            self._log.info('enabling relay node…')
+            super().enable()
+            asyncio.create_task(self._run_loop())
+            self._log.info(Fore.GREEN + 'relay ready.')
+        else:
+            self._log.warn('already enabled.')
+
+    def _load_encryption_keys(self):
+        '''
+        Attempt to load keys.yaml, which contains the PMK and LMK keys. If this fails it disables encryption.
+        '''
+        self._log.info('attempting to enable encrypted transport…')
+        
+        from yaml import FileNotFoundError
+        from config_loader import ConfigLoader
+
+        keys_filename = 'keys.yaml'
+        try:
+            keys_config = ConfigLoader.configure(keys_filename, suppress_error_message=True)
+            # configure global PMK
+            global_pmk_hex = keys_config['relay']['pmk']
+            self._espnow.set_pmk(bytes.fromhex(global_pmk_hex))
+            # cache the device keys map
+            self._crypto_peers = keys_config['relay']['devices']
+            self._encryption_enabled = True
+            self._log.info('successfully loaded keys configuration: ' + Fore.GREEN + "encryption enabled.")
+        except ( FileNotFoundError, OSError) as e:
+            # file does not exist or cannot be read
+            self._log.warn("cannot enable encryption: '{}' file not found.\n{:>52}".format(keys_filename, '')
+                    + 'Generate it via key_generator.py and share across all nodes.')
+            self._encryption_enabled = False
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'using open transport.')
+        except Exception as e:
+            self._log.error('cannot enable encryption: {} raised reading {} file: {}'.format(type(e), keys_filename, e))
+            self._encryption_enabled = False
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'using open transport.')
+
+    def print_configuration(self):
+        for i, device in enumerate(self._device_list):
+            num = i + 1
+            name = device.get('name')
+            mac_address = device.get('mac')
+            enabled = device.get('enabled')
+            if not enabled:
+                self._log.info(Style.DIM 
+                        + '[{}]  {:<34} '.format(num, name) 
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
+            elif mac_address == self._local_mac_str.lower():
+                self._log.info('[{}]  {:<34} '.format(num, name) + Style.BRIGHT
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
+            else:
+                self._log.info('[{}]  {:<34} '.format(num, name) 
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
 
     def _establish_initiator(self):
         '''
@@ -115,37 +195,52 @@ class Relay(Component):
 
         self._initiator = Initiator(self._config, self)
 
+    def _add_neighbor_peer(self, mac_str, mac_bytes):
+        '''
+        Registers a single neighbor peer with encryption if enabled.
+        '''
+        if self._encryption_enabled:
+            lmk_hex = self._crypto_peers.get(mac_str)
+            if lmk_hex:
+                self._espnow.add_peer(mac_bytes, bytes.fromhex(lmk_hex), encrypt=True)
+            else:
+                self._log.warn("no LMK found for peer {}; registering unencrypted.".format(mac_str))
+                self._espnow.add_peer(mac_bytes)
+        else:
+            self._espnow.add_peer(mac_bytes)
+
     def _build_routing_map(self):
         '''
         Build neighbor routing maps and display to console.
+        Returns a flag indicating whether this device is enabled or disabled.
         '''
-        # disable device if configuration flag is False
-        if self._device_list[self._index].get('enabled') is False:
-            self.disable()
-        upstream_name = "None"
-        downstream_name = "None"
         # scan backwards to find the first enabled upstream neighbor
         for i in range(self._index - 1, -1, -1):
             device = self._device_list[i]
             if device.get('enabled', True):
-                _mac_address = device.get('mac')
-                self._upstream_mac = self._mac_to_bytes(_mac_address)
-                upstream_name = Fore.GREEN + device.get('name')
+                self._upstream_name = device.get('name')
+                self._upstream_mac = device.get('mac')
+                self._upstream_mac_bytes = self.mac_to_bytes(self._upstream_mac)
+                self._log.debug("upstream name: '{}'; mac='{}'".format(self._upstream_name, self._upstream_mac))
+                self._add_neighbor_peer(self._upstream_mac, self._upstream_mac_bytes)
                 break
         # scan forwards to find the first enabled downstream neighbor
         for i in range(self._index + 1, self._total_devices):
             device = self._device_list[i]
             if device.get('enabled', True):
-                _mac_address = device.get('mac')
-                self._downstream_mac = self._mac_to_bytes(_mac_address)
-                downstream_name = Fore.GREEN + device.get('name')
+                self._downstream_name = device.get('name')
+                self._downstream_mac = device.get('mac')
+                self._downstream_mac_bytes = self.mac_to_bytes(self._downstream_mac)
+                self._log.debug("downstream name: '{}'; mac='{}'".format(self._downstream_name, self._downstream_mac))
+                self._add_neighbor_peer(self._downstream_mac, self._downstream_mac_bytes)
                 break
         else:
             self._is_endpoint = True
         # determine role label for console output
-        if not self.enabled:
+        _enabled = self._device_list[self._index].get('enabled');
+        if not _enabled:
             role_label = Fore.RED + "DISABLED"
-            self.disable()
+            # disable device if configuration flag is False
         elif self._index == 0:
             role_label = Fore.GREEN + "INITIATOR"
         elif self._is_endpoint:
@@ -154,8 +249,9 @@ class Relay(Component):
             role_label = Fore.GREEN + "RELAY NODE"
         self._log.info("topology routing resolved:")
         self._log.info("  ├─ Role:       {}".format(role_label))
-        self._log.info("  ├─ Upstream:   {}".format(upstream_name))
-        self._log.info("  └─ Downstream: {}".format(downstream_name))
+        self._log.info("  ├─ Upstream:   {}{}".format(Fore.GREEN, self._upstream_name))
+        self._log.info("  └─ Downstream: {}{}".format(Fore.GREEN, self._downstream_name))
+        return _enabled
 
     def set_receive_callback(self, callback):
         self._rx_callback = callback
@@ -164,14 +260,57 @@ class Relay(Component):
         '''
         Serializes an existing Message instance and transmits it over the network.
         '''
+        if not isinstance(peer, bytes):
+            raise TypeError('was passed {} rather than bytes object.'.format(type(peer)))
         if self._verbose:
             self._log.info('sending message in {} direction: {}'.format(direction, message))
-        payload = "{},{},{}".format(
-            direction,
-            message.event.label,
-            message.value if message.value is not None else ""
-        )
-        self._espnow.send(peer, payload.encode('utf-8'))
+        payload = self._message_codec.serialize(direction, message)
+        ok = False
+        try:
+            encoded_payload = payload.encode('utf-8')
+            payload_len = len(encoded_payload)
+            self._log.debug('sending message in direction: {}.'.format(direction))
+            ok = self._espnow.send(peer, encoded_payload)
+            if not ok:
+                if peer == self._upstream_mac_bytes:
+                    self._log.error("error sending message to upstream peer '{}': {}".format(self._upstream_name, self._upstream_mac))
+                    # not recoverable as we can't get back to initiator
+                elif peer == self._downstream_mac_bytes:
+                    self._log.error("error sending message to downstream peer '{}': {}".format(self._downstream_name, self._downstream_mac))
+                    # send error message back to initiator
+                    self._handle_routing_failure(message)
+
+        except Exception as e:
+            self._log.error("{} raised sending message to peer: '{}': {}".format(type(e), peer, e))
+            sys.print_exception(e)
+        finally:
+            if ok:
+                self._log.debug('message was sent.')
+            else:
+                self._log.warn('message was not sent.')
+
+    def _handle_routing_failure(self, message):
+        '''
+        Handles downstream transport failure by bouncing the message upstream
+        with an inverted direction flag, protected against infinite routing loops.
+        '''
+        self._log.info('handling routing error…')
+        if message.id in self._seen_errors:
+            self._log.warning("routing loop detected for message id: '{}'; dropping packet.".format(message.id))
+            return
+        # track the error and manage bounded cache constraint
+        self._seen_errors.append(message.id)
+        if len(self._seen_errors) > 20:
+            self._seen_errors.pop(0)
+        _value = "DELIVERY FAILURE: id={}; event={}; downstream peer: {}; MAC={}".format(
+                message.id, 
+                message.event.label, 
+                self._downstream_name, 
+                self._downstream_mac)
+        self._log.info('sending error message to initiator: ' + Fore.YELLOW + '{}'.format(_value))
+        _error_message = self._message_factory.create_message(event=FAILURE, value=_value)
+        _error_message.id = message.id # error message shares ID with original
+        self.send_message(self._upstream_mac_bytes, -1, _error_message)
 
     def process_endpoint_logic(self, incoming_message):
         '''
@@ -204,24 +343,24 @@ class Relay(Component):
                 self._log.info('handling outbound message at endpoint: {}'.format(message))
             self._led_task = asyncio.create_task(self._flash_led(COLOR_TANGERINE, 3000))
             response_msg = self.process_endpoint_logic(message)
-            if self._upstream_mac:
-                self.send_message(self._upstream_mac, -1, response_msg)
+            if self._upstream_mac_bytes:
+                self.send_message(self._upstream_mac_bytes, -1, response_msg)
         else:
             if self._verbose:
                 self._log.info('handling outbound message: {}'.format(message))
             self._led_task = asyncio.create_task(self._flash_led(COLOR_SKY_BLUE, 500))
-            if self._downstream_mac:
-                self.send_message(self._downstream_mac, 1, message)
+            if self._downstream_mac_bytes:
+                self.send_message(self._downstream_mac_bytes, 1, message)
 
     def handle_inbound(self, message):
         '''
         Handles messages moving up the chain back toward the initiator (Node 1).
         '''
-        if self._upstream_mac:
+        if self._upstream_mac_bytes:
             if self._verbose:
                 self._log.info('handling inbound message: {}'.format(message))
             self._led_task = asyncio.create_task(self._flash_led(COLOR_DEEP_FUCHSIA, 500))
-            self.send_message(self._upstream_mac, -1, message)
+            self.send_message(self._upstream_mac_bytes, -1, message)
         else:
             if self._verbose:
                 self._log.info("initiator received ricochet response: {}".format(repr(message)))
@@ -229,7 +368,7 @@ class Relay(Component):
                 self._rx_callback(message)
             self._led_task = asyncio.create_task(self._flash_led(COLOR_APPLE, 3000))
 
-    async def run_loop(self):
+    async def _run_loop(self):
         '''
         Asynchronous polling loop that processes incoming packets without blocking.
         '''
@@ -237,19 +376,12 @@ class Relay(Component):
             # check for incoming ESP-NOW packets
             host, msg = self._espnow.recv()
             if msg:
+#               self._log.debug("received message: '{}'".format(msg))
                 try:
                     decoded_msg = msg.decode('utf-8')
-                    parts = decoded_msg.split(',', 2)
-                    if len(parts) < 3:
-                        continue
-                    direction = int(parts[0])
-                    event_label = parts[1]
-                    raw_value = parts[2]
-                    value_payload = raw_value if raw_value != "" else None
-                    reconstructed_msg = self._message_factory.create_message(
-                        event=RELAY,
-                        value=value_payload
-                    )
+#                   self._log.debug("decoded message: '{}'".format(decoded_msg))
+                    direction, reconstructed_msg = self._message_codec.deserialize(decoded_msg)
+#                   self._log.debug("reconstructed message: '{}'".format(reconstructed_msg))
                     if direction == 1:
                         self.handle_outbound(reconstructed_msg)
                     elif direction == -1:
@@ -261,10 +393,33 @@ class Relay(Component):
 
     # utility methods ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    @staticmethod
+    def find_device_by_mac(device_list, mac_str):
+        '''
+        Searches a list of device configurations for a matching MAC address.
+        
+        :param device_list: The list of device dictionaries from config
+        :param mac_str: The target MAC address string
+        :return: A tuple of (index, device_dict) if found, otherwise (None, None)
+        '''
+        target_mac = mac_str.strip().lower()
+        for i, device in enumerate(device_list):
+            # Enforce direct lookup logic
+            if device['mac'].strip().lower() == target_mac:
+                return i, device
+        return None, None
+
+    def _show_color(self, color):
+        '''
+        Set the color of the pixel.
+        '''
+        if self._pixel:
+            self._pixel.show_color(COLOR_DEEP_CYAN)
+
     async def _flash_led(self, color, duration_ms=1000):
-        self._pixel.show_color(color)
+        self._show_color(color)
         await asyncio.sleep_ms(duration_ms)
-        self._pixel.show_color(COLOR_BLACK)
+        self._show_color(COLOR_BLACK)
 
     def _reverse_string(self, value):
         '''
@@ -272,7 +427,7 @@ class Relay(Component):
         '''
         return ''.join(reversed(value))
 
-    def _mac_to_bytes(self, mac_str):
+    def mac_to_bytes(self, mac_str):
         '''
         Converts a colon-separated hex MAC string into a bytes object.
         '''

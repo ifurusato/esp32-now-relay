@@ -16,6 +16,7 @@ import time
 from colorama import Fore, Style
 from colors import *
 from logger import Logger, Level
+from networking import Networking
 from config_loader import ConfigLoader
 from message_bus import MessageBus
 from message_factory import MessageFactory
@@ -51,14 +52,17 @@ def detect_device_type():
     # safely convert to lowercase to handle any variations in firmware versions
     machine_info = sys.implementation._machine.lower()
     if "tinypico" in machine_info:
-        return "TinyPICO"
+        return "tinypico"
     elif "feathers2" in machine_info:
-        return "FeatherS2"
+        return "feathers2"
     elif "tinys3" in machine_info:
-        return "TinyS3"
+        return "tinys3"
+    elif "generic esp32s3" in machine_info:
+        return None # likely "zero"
     else:
         # fallback to checking the underlying chip generation if the device manufacturer altered the string
-        return "unknown device (platform info: {})".format(sys.implementation._machine)
+        _log.info("unknown device (platform info: {})".format(sys.implementation._machine))
+        return None
 
 def pre_blink():
     '''
@@ -82,34 +86,37 @@ def print_sysinfo():
         (s[4] * s[1]) / 1024
     ))
 
-def identify_device_type():
+def load_pixel_implementation(config, device_type):
     '''
-    Identifies the type of device and loads the supporting pixel class.
+    Loads the supporting pixel class for the given device type.
     This is done right at the beginning so we have a pixel to work with.
-
-    If no device is recognised, the 'pixel' variable remains as None.
-    This is not an error condition but there will be no RGB LED activity
-    on that device.
     '''
     global pixel
-    device_type = detect_device_type()
-    if device_type == "TinyPICO":
+    if device_type == "tinypico":
         # TinyPICO uses APA102 (DotStar) RGB LED on pins 2, 3
         from pico_pixel import PicoPixel
         pixel = PicoPixel()
         log.info('device identified as: ' + Fore.GREEN + 'UM TinyPICO')
-    elif device_type == "TinyS3":
+        return True
+    elif device_type == "tinys3":
         # TinyS3 uses a WS2812B (NeoPixel) on pin 18 and has user controlled RF switch
         from s3_pixel import S3Pixel
         pixel = S3Pixel()
         log.info('device identified as: ' + Fore.GREEN + 'UM TinyS3')
-    elif device_type == "FeatherS2":
+        return True
+    elif device_type == "feathers2":
         from feather_pixel import FeatherPixel
         pixel = FeatherPixel()
         # FeatherS2 uses an APA102 on pins 40, 39 and has unique LDO control
         log.info('device identified as: ' + Fore.GREEN + 'UM FeatherS2')
-    else:
-        log.info('device identified as: ' + Fore.GREEN + device_type)
+        return True
+    elif device_type == "zero":
+        from zero_pixel import ZeroPixel
+        pixel = ZeroPixel()
+        # we make a dangerous assumption that this is a Waveshare ESP32-S3 Zero
+        log.info('device identified as: ' + Fore.GREEN + 'Waveshare ESP32-S3 Zero')
+        return True
+    return False
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -119,24 +126,40 @@ _relay_node      = None
 
 try:
 
-    identify_device_type()
-    pre_blink()
-    print_sysinfo()
+    networking   = Networking()
+    mac_address  = networking.mac_address
+    device_type  = detect_device_type()
 
     config = ConfigLoader.configure('config.yaml')
+    loaded_pixel = load_pixel_implementation(config, device_type)
+    if not loaded_pixel:
+        # try again with MAC address and config 
+        device_catalog = config['relay']['devices']
+        node_index, node_profile = Relay.find_device_by_mac(device_catalog, mac_address)
+        device_type = node_profile['device']
+        loaded_pixel = load_pixel_implementation(config, device_type)
+        log.info('device identifier: {}{}{} (via MAC address)'.format(Fore.GREEN, device_type, Fore.CYAN))
+
+    if pixel:
+        pre_blink()
+    print_sysinfo()
+
     _relay_node = Relay(
         config=config,
+        networking=networking,
+        message_bus=_message_bus,
         message_factory=_message_factory,
         pixel=pixel
     )
 
     # execution processing via asyncio
     log.info("scheduling relay task and starting event loop…")
-    asyncio.create_task(_relay_node.run_loop())
-    # schedule MessageBus background tasks in the future
-    # asyncio.create_task(message_bus.start())
+    _relay_node.enable()
+#   asyncio.create_task(_relay_node.run_loop())
     # keep the main thread alive or run the main loop hook
-    asyncio.get_event_loop().run_forever()
+#   asyncio.get_event_loop().run_forever()
+    # keep the main thread alive using the MessageBus
+    _message_bus.enable()
 
 except KeyboardInterrupt:
     log.info('interrupted.')
@@ -144,6 +167,7 @@ except Exception as e:
     log.error('{} raised: {}'.format(type(e), e))
     sys.print_exception(e)
 finally:
-    pixel.close()
+    if pixel:
+        pixel.close()
 
 #EOF

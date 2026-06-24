@@ -16,8 +16,10 @@ from logger import Logger, Level
 from message import Message
 from message_bus import MessageBus
 from event import Event
+from message_codec import MessageCodec
 
 class MessageFactory(Component):
+    MAX_VALUE_LENGTH = 150 # maximum length of value given typical payload size and ESP32-NOW's 250 byte limit
     '''
     A factory for Messages.
     '''
@@ -37,6 +39,10 @@ class MessageFactory(Component):
         Create and return a new message with the supplied event and optional
         value. Not all event types are associated with a value.
         '''
+        if isinstance(value, str) and MessageCodec.DELIMITER in value:
+            raise ValueError("message value cannot contain the protocol delimiter '{}'".format(MessageCodec.DELIMITER))
+        if len(value) > self.MAX_VALUE_LENGTH:
+                raise ValueError("message value exceeds maximum allowable length of {:d} characters".format(self.MAX_VALUE_LENGTH))
         _message = Message(event=event, value=value)
         return _message
 

@@ -54,12 +54,26 @@ class Event:
     def __repr__(self):
         return 'Event({})'.format(self._label)
 
+    @classmethod
+    def by_label(cls, label):
+        '''
+        Looks up and returns an Event instance by its string label using the registry.
+        
+        :param label: The string label of the event
+        :return: The matching Event instance, or None if not registered
+        '''
+        for event in cls._registry:
+            if event.label == label:
+                return event
+        return None
+
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 # event instances
 
-TOF_DISTANCES = Event(0, 'tof',     priority=0.5)
-SYSTEM        = Event(1, 'system',  priority=1.0)
-STARTUP       = Event(2, 'startup', priority=1.0)
-RELAY         = Event(3, 'relay',   priority=1.0)
+FAILURE       = Event(0, 'failure', priority=1.0)
+TOF_DISTANCES = Event(1, 'tof',     priority=0.5)
+SYSTEM        = Event(2, 'system',  priority=1.0)
+STARTUP       = Event(3, 'startup', priority=1.0)
+RELAY         = Event(4, 'relay',   priority=1.0)
 
 #EOF

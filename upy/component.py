@@ -76,15 +76,20 @@ class Component:
         return self._closed
 
     def enable(self):
-        if not self._closed:
+        if self._closed:
+            self._log.warn('already closed.')
+        elif not self._enabled:
             self._enabled = True
             self._log.info('enabled.')
         else:
-            self._log.warn('already closed.')
+            self._log.warn('already enabled.')
 
     def disable(self):
-        self._enabled = False
-        self._log.info('disabled.')
+        if not self._enabled:
+            self._log.warn('already disabled.')
+        else:
+            self._enabled = False
+            self._log.info('disabled.')
 
     def suppress(self):
         self._suppressed = True
