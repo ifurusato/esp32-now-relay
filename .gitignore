@@ -219,3 +219,5 @@ __marimo__/
 
 # ignore archived files
 archive/
+# don't share encrypted keys file
+upy/keys.yaml

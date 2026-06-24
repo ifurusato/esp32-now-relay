@@ -41,7 +41,7 @@ class Relay(Component):
         self._verbose = _cfg['verbose']
         self._device_list = _cfg['devices']
         self._total_devices = len(self._device_list)
-        self._log.info('loaded configuration for:   ' + Fore.GREEN + '{} devices.'.format(self._total_devices))
+        self._log.info('loaded configuration for ' + Fore.GREEN + '{} devices:'.format(self._total_devices))
         self._local_mac_str = self._networking.mac_address
         self.print_configuration()
         self._log.info('device MAC address: ' + Fore.GREEN + '{}'.format(self._local_mac_str))
@@ -52,7 +52,7 @@ class Relay(Component):
             raise ConfigurationError("local MAC address '{}' not found in topology catalog.".format(self._local_mac_str))
         else:
             self._show_color(COLOR_DEEP_CYAN)
-            self._log.info('this device identified as:  '
+            self._log.info('this device identified as: '
                     + Fore.GREEN + '{}'.format(self._device_list[self._index].get('name')))
         # set up ESP32-NOW ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._espnow = self._networking.espnow
