@@ -28,11 +28,11 @@ relay:
 
     - name:        "Node 4 - TinyPICO light green"
       mac:         "24:a1:60:75:ba:84"
-      enabled:     True
+      enabled:     False
 
     - name:        "Node 5 - Waveshare ESP32-S3 Zero"
       mac:         "24:ec:4a:26:8f:5c"
-      enabled:     True
+      enabled:     False
       device:      "zero"
 
     - name:        "Node 6 - TinyPICO red"

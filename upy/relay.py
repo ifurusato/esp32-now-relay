@@ -442,9 +442,10 @@ class Relay(Component):
         Set the color of the pixel.
         '''
         if self._pixel:
-            self._pixel.show_color(COLOR_DEEP_CYAN)
+            self._pixel.show_color(color)
 
     async def _flash_led(self, color, duration_ms=1000):
+        self._log.debug('flash led: {}'.format(color.name))
         self._show_color(color)
         await asyncio.sleep_ms(duration_ms)
         self._show_color(COLOR_BLACK)
