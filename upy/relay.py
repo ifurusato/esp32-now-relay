@@ -195,18 +195,45 @@ class Relay(Component):
 
         self._initiator = Initiator(self._config, self)
 
-    def _add_neighbor_peer(self, mac_str, mac_bytes):
+
+    def _add_neighbor_peer(self, label, mac_str, mac_bytes):
         '''
-        Registers a single neighbor peer with encryption if enabled.
+        Registers a single neighbor peer with encryption if enabled. This adds the key for
+        each node pairing so the same key is used for transmissions in both directions.
+
+        :param label:       either 'upstream' or 'downstream' to indicate which node
+        :param mac_str:      the human-readable MAC address
+        :param mac_bytes:    the MAC address in bytes
         '''
         if self._encryption_enabled:
-            lmk_hex = self._crypto_peers.get(mac_str)
-            if lmk_hex:
-                self._espnow.add_peer(mac_bytes, bytes.fromhex(lmk_hex), encrypt=True)
+            this_device = self._device_list[self._index]
+            this_mac_str = this_device.get('mac')
+            # determine the link key by using the lower index node's MAC address
+            if label == 'upstream':
+                # upstream neighbor has a lower index than this node
+                link_mac_str = mac_str
             else:
-                self._log.warn("no LMK found for peer {}; registering unencrypted.".format(mac_str))
+                # this node has a lower index than the downstream neighbor
+                link_mac_str = this_mac_str
+            lmk_hex = self._crypto_peers.get(link_mac_str)
+            if lmk_hex:
+                self._log.info("setting LMK for pair: {}{}{} 🡰 🡲  {}{}{}".format(
+                        Fore.GREEN,
+                        this_mac_str, 
+                        Fore.CYAN,
+                        Fore.GREEN,
+                        mac_str,
+                        Fore.CYAN))
+                self._log.info('adding encrypted {:>10} peer        mac: '.format(label) + Fore.GREEN + '{}'.format(mac_str))
+                self._espnow.add_peer(mac_bytes, bytes.fromhex(lmk_hex), encrypt=True) 
+                mac_bytes, lmk_bytes, channel, ifidx, encrypt = self._espnow.get_peer(mac_bytes)
+                mac = self.bytes_to_mac(mac_bytes)
+                lmk = self.bytes_to_lmk(lmk_bytes)
+                self._log.debug('info: ' + Fore.BLUE + "mac: '{}'; lmk: '{}'; channel: {}; ifidx: {}; encrypt: {}".format(mac, lmk, channel, ifidx, encrypt))
+            else:
+                self._log.warn("no LMK found for link key {}; registering unencrypted.".format(link_mac_str))
                 self._espnow.add_peer(mac_bytes)
-        else:
+        else:   
             self._espnow.add_peer(mac_bytes)
 
     def _build_routing_map(self):
@@ -222,7 +249,7 @@ class Relay(Component):
                 self._upstream_mac = device.get('mac')
                 self._upstream_mac_bytes = self.mac_to_bytes(self._upstream_mac)
                 self._log.debug("upstream name: '{}'; mac='{}'".format(self._upstream_name, self._upstream_mac))
-                self._add_neighbor_peer(self._upstream_mac, self._upstream_mac_bytes)
+                self._add_neighbor_peer("upstream", self._upstream_mac, self._upstream_mac_bytes)
                 break
         # scan forwards to find the first enabled downstream neighbor
         for i in range(self._index + 1, self._total_devices):
@@ -232,7 +259,7 @@ class Relay(Component):
                 self._downstream_mac = device.get('mac')
                 self._downstream_mac_bytes = self.mac_to_bytes(self._downstream_mac)
                 self._log.debug("downstream name: '{}'; mac='{}'".format(self._downstream_name, self._downstream_mac))
-                self._add_neighbor_peer(self._downstream_mac, self._downstream_mac_bytes)
+                self._add_neighbor_peer("downstream", self._downstream_mac, self._downstream_mac_bytes)
                 break
         else:
             self._is_endpoint = True
@@ -271,6 +298,7 @@ class Relay(Component):
             payload_len = len(encoded_payload)
             self._log.debug('sending message in direction: {}.'.format(direction))
             ok = self._espnow.send(peer, encoded_payload)
+            self._log.info("ok type: {}; value: '{}'".format(type(ok), ok))
             if not ok:
                 if peer == self._upstream_mac_bytes:
                     self._log.error("error sending message to upstream peer '{}': {}".format(self._upstream_name, self._upstream_mac))
@@ -375,8 +403,8 @@ class Relay(Component):
         while True:
             # check for incoming ESP-NOW packets
             host, msg = self._espnow.recv()
-            if msg:
-#               self._log.debug("received message: '{}'".format(msg))
+            if msg is not None:
+                self._log.info("received message: '{}'".format(msg))
                 try:
                     decoded_msg = msg.decode('utf-8')
 #                   self._log.debug("decoded message: '{}'".format(decoded_msg))
@@ -433,5 +461,18 @@ class Relay(Component):
         '''
         clean_hex = mac_str.replace(':', '')
         return ubinascii.unhexlify(clean_hex)
+
+    def bytes_to_mac(self, mac_bytes):
+        '''
+        Converts a bytes object into a colon-separated hex MAC string.
+        '''
+        hex_str = ubinascii.hexlify(mac_bytes).decode('utf-8')
+        return ':'.join([hex_str[i:i+2] for i in range(0, 12, 2)])
+
+    def bytes_to_lmk(self, lmk_bytes):
+        '''
+        Converts a bytes object into a standard hex string representation.
+        '''
+        return ubinascii.hexlify(lmk_bytes).decode('utf-8')
 
 #EOF

@@ -34,7 +34,7 @@ class Networking:
         # set up ESP32-NOW ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._espnow = espnow.ESPNow()
         self._espnow.active(True)
-        self._espnow.config(timeout_ms=2)
+        self._espnow.config(timeout_ms=0)
         self._log.info('ready.')
 
     @property
