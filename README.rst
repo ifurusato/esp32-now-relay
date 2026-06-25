@@ -50,6 +50,38 @@ If there is no corresponding machine identifier in main.py, no RGB LED pixel
 class will be assigned, and there will be no visual indication of activity.
 
 
+Encryption
+----------
+
+There is an option to send messages using ESP32-NOW encryption. 
+
+This uses the config.yaml file that's been populated with the MAC addresses 
+of the relay nodes along with a new key_generator.py script, which generates 
+a global PMK key and a set of LMK keys, one for each node pairing, which is 
+stored in a keys.yaml file. Enabling encryption in config.yaml then uses this 
+file to set up encrypted transport between nodes.
+
+To generate the keys.yaml file, enter the REPL::
+
+    MicroPython v1.25.0 on 2025-04-15; FeatherS2 with ESP32-S2
+    Type "help()" for more information.
+    >>>
+    >>> from key_generator import KeyGenerator
+    >>> KeyGenerator.generate_keys()
+    2026-06-25T21:17:29.591Z : key-gen        : INFO  : loading configuration…
+    2026-06-25T21:17:29.671Z : key-gen        : INFO  : loaded configuration for 3 devices.
+    2026-06-25T21:17:29.677Z : key-gen        : INFO  : generated key for device with MAC address: dc:54:75:eb:69:c8
+    2026-06-25T21:17:29.682Z : key-gen        : INFO  : generated key for device with MAC address: 64:b7:08:90:5c:c4
+    2026-06-25T21:17:29.687Z : key-gen        : INFO  : generated key for device with MAC address: 50:78:7d:17:fe:d8
+    2026-06-25T21:17:29.713Z : key-gen        : INFO  : generated global key.
+    2026-06-25T21:17:29.719Z : key-gen        : INFO  : writing output to: keys.yaml
+    2026-06-25T21:17:30.777Z : key-gen        : INFO  : complete.
+    True
+    >>>
+
+The keys.yaml file must then be copied across all nodes in the relay.
+
+
 Usage
 -----
 

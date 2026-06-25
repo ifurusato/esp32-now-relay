@@ -3,6 +3,7 @@ FILES
 # relay .................
 main.py                 # main application executor
 relay.py                # relay support
+networking.py           # establishes WLAN and ESPNOW support
 
 # message bus ...........
 event.py                # event types
@@ -15,6 +16,7 @@ configuration ...........
 config_error.py         # exception class
 config.yaml             # YAML application/network configuration
 config_loader.py        # loads YAML file
+keys.yaml               # optional: contains PMK and LMK keys used for encryption
 
 infrastructure ..........
 component.py            # component superclass
@@ -36,7 +38,10 @@ push_button.py          # supports a debounced push button
 utility/support .........
 colorama.py             # cheap version of colorama for console messages
 colors.py               # pseudo-enum of colors
+free.py                 # reports free space on device
 identify.py             # script to obtain MAC address and machine identifier
-uuid.py                 # generates type 4 UUIDs
+key_generator.py        # generates PMK and LMK keys for encrypted transport
+message_codec.py        # handles serialization and deserialization of Messages
+uuid.py                 # generates type 4 UUIDs, used for message IDs
 yaml.py                 # YAML file reader
 
