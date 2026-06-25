@@ -1,6 +1,6 @@
-*******************************************************
-esp32-now-replay: A multi-node relay based on ESP32-NOW
-*******************************************************
+******************************************************
+esp32-now-relay: A multi-node relay based on ESP32-NOW
+******************************************************
 
 This provides a means of interconnecting a configured relay of ESP32
 devices via ESP32-NOW, so that messages may be sent back and forth 
