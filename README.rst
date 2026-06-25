@@ -4,7 +4,7 @@ esp32-now-relay: A multi-node relay based on ESP32-NOW
 
 This provides a means of interconnecting a configured relay of ESP32
 devices via ESP32-NOW, so that messages may be sent back and forth
-across the relay. Encryption is supported.
+across the relay. Encrypted communication between nodes is supported.
 
 
 Features
@@ -23,6 +23,8 @@ Future Work
   Relay node becomes part of a network-distributed pub-sub system. Publishers
   and Subscribers will be able to utilise the Relay for message passing between
   nodes.
+* Add a peers table report showing RSSI (signal strength), to help diagnose
+  communications issues.
 
 
 Installation
@@ -54,13 +56,13 @@ Encryption
 ----------
 
 There is an option to send messages using ESP32-NOW encryption. Encryption
-requires a global PMK key and LMK keys between nodes. There is a utility to
-generate these keys using type 4 UUIDs as a source.
+requires a global PMK (Primary Master Key) and LMK (Local Mster Key) between
+nodes. There is a utility to generate these keys using type 4 UUIDs as a source.
 
 This uses the config.yaml file that's been populated with the MAC addresses
 of the relay nodes along with a new key_generator.py script, which generates
 the keys. The keys are stored in a keys.yaml file. Once encryption has been
-enabled in config.yaml this uses the key file to set up encrypted transport
+enabled in config.yaml this uses the key file to set up encrypted communications
 between nodes.
 
 To generate the keys.yaml file, enter the REPL::
