@@ -3,8 +3,8 @@ esp32-now-relay: A multi-node relay based on ESP32-NOW
 ******************************************************
 
 This provides a means of interconnecting a configured relay of ESP32
-devices via ESP32-NOW, so that messages may be sent back and forth 
-across the relay.
+devices via ESP32-NOW, so that messages may be sent back and forth
+across the relay. Encryption is supported.
 
 
 Features
@@ -19,8 +19,8 @@ Features
 Future Work
 -----------
 
-* Integrate Relay into existing asyncio MessageBus architecture so that each 
-  Relay node becomes part of a network-distributed pub-sub system. Publishers 
+* Integrate Relay into existing asyncio MessageBus architecture so that each
+  Relay node becomes part of a network-distributed pub-sub system. Publishers
   and Subscribers will be able to utilise the Relay for message passing between
   nodes.
 
@@ -40,10 +40,10 @@ identifier.
 
 Edit the config.yaml file to contain the number of devices, including the
 MAC address of each. The 'name' value is anything that is helpful to identify
-the device amongst others. 
+the device amongst others.
 
-The first device in the list is the initiator node, the last is the endpoint 
-node, and the rest are relay nodes. Copy the properly configured config.yaml 
+The first device in the list is the initiator node, the last is the endpoint
+node, and the rest are relay nodes. Copy the properly configured config.yaml
 file to each of the nodes.
 
 If there is no corresponding machine identifier in main.py, no RGB LED pixel
@@ -53,13 +53,15 @@ class will be assigned, and there will be no visual indication of activity.
 Encryption
 ----------
 
-There is an option to send messages using ESP32-NOW encryption. 
+There is an option to send messages using ESP32-NOW encryption. Encryption
+requires a global PMK key and LMK keys between nodes. There is a utility to
+generate these keys using type 4 UUIDs as a source.
 
-This uses the config.yaml file that's been populated with the MAC addresses 
-of the relay nodes along with a new key_generator.py script, which generates 
-a global PMK key and a set of LMK keys, one for each node pairing, which is 
-stored in a keys.yaml file. Enabling encryption in config.yaml then uses this 
-file to set up encrypted transport between nodes.
+This uses the config.yaml file that's been populated with the MAC addresses
+of the relay nodes along with a new key_generator.py script, which generates
+the keys. The keys are stored in a keys.yaml file. Once encryption has been
+enabled in config.yaml this uses the key file to set up encrypted transport
+between nodes.
 
 To generate the keys.yaml file, enter the REPL::
 
@@ -87,19 +89,27 @@ Usage
 
 Once the files and configuration are complete, all the devices should be
 reset. Each will start with three light blue flashes followed by a steady
-blue. This indicates the Relay is ready. A pushbutton connected between
-IO5 and ground of the initiator node will trigger a message onto the bus.
+blue. This indicates the Relay is ready.
 
-The message will travel to the endpoint, be processed and return to the 
-initiator node. The LEDs on all devices will change color momentarily to 
+For testing purposes, a pushbutton connected between IO5 and ground of the
+initiator node will trigger a message onto the bus. This uses a randomn
+food name generator (e.g., "tasty carrots") to populate the message.
+
+The message will travel to the endpoint, be processed and return to the
+initiator node. The LEDs on all devices will change color momentarily to
 indicate status. The message is reversed by the endpoint node, so the
 value as returned will reflect that change.
+
+There is extensive console logging on all nodes, which should help debug
+any issues. If the message fails to be delivered to a node, the last
+successful node sends back an error message to the initiator node to
+indicate which node had failed.
 
 
 Requirements
 ------------
 
-This has been tested with MicroPython v1.25.0 and v1.28.0 and should work 
+This has been tested with MicroPython v1.25.0 and v1.28.0 and should work
 on any newer version.
 
 This should work on all ESP32 boards that support ESP32-NOW, including
