@@ -20,6 +20,8 @@ from networking import Networking
 from config_loader import ConfigLoader
 from message_bus import MessageBus
 from message_factory import MessageFactory
+from gateway import NetworkGateway
+from surveyor import Surveyor
 from event import *
 from relay import Relay
 
@@ -31,7 +33,7 @@ for mod in ['main']:
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 IS_TINYS3 = True # otherwise TinyPICO
-START_COUNT = 3
+START_COUNT = 1
 
 pixel = None
 log = Logger('main', Level.INFO)
@@ -78,12 +80,12 @@ def pre_blink():
 def print_sysinfo():
     gc.collect()
     s = os.statvfs('/')
-    log.info('RAM free: {:.1f}KB; used: {:.1f}KB; FS total: {:.1f}KB; used: {:.1f}KB; free: {:.1f}KB'.format(
-        gc.mem_free()  / 1024,
-        gc.mem_alloc() / 1024,
-        (s[2] * s[1]) / 1024,
-        ((s[2] * s[1]) - (s[4] * s[1])) / 1024,
-        (s[4] * s[1]) / 1024
+    log.info('RAM free: {:.1f}KB; used: {:.1f}KB; FS used/total: {:.1f}KB/{:.1f}KB; free: {:.1f}KB'.format(
+        gc.mem_free()  / 1024,                   # ram free
+        gc.mem_alloc() / 1024,                   # ram used
+        ((s[2] * s[1]) - (s[4] * s[1])) / 1024,  # fs used
+        (s[2] * s[1]) / 1024,                    # fs total
+        (s[4] * s[1]) / 1024                     # fs free
     ))
 
 def load_pixel_implementation(config, device_type):
@@ -120,42 +122,51 @@ def load_pixel_implementation(config, device_type):
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-_message_bus     = MessageBus()
-_message_factory = MessageFactory(_message_bus)
-_relay_node      = None
-
 try:
 
-    networking   = Networking()
-    mac_address  = networking.mac_address
-    device_type  = detect_device_type()
+    _config = ConfigLoader.configure('config.yaml')
 
-    config = ConfigLoader.configure('config.yaml')
-    loaded_pixel = load_pixel_implementation(config, device_type)
+    _message_bus     = MessageBus()
+    _message_factory = MessageFactory(_message_bus)
+    _networking      = Networking()
+    mac_address      = _networking.mac_address
+    device_type      = detect_device_type()
+
+    loaded_pixel = load_pixel_implementation(_config, device_type)
     if not loaded_pixel:
         # try again with MAC address and config 
-        device_catalog = config['relay']['devices']
+        device_catalog = _config['rros']['relay']['devices']
         node_index, node_profile = Relay.find_device_by_mac(device_catalog, mac_address)
         device_type = node_profile['device']
-        loaded_pixel = load_pixel_implementation(config, device_type)
+        loaded_pixel = load_pixel_implementation(_config, device_type)
         log.info('device identifier: {}{}{} (via MAC address)'.format(Fore.GREEN, device_type, Fore.CYAN))
 
     if pixel:
         pre_blink()
     print_sysinfo()
 
-    _relay_node = Relay(
-        config=config,
-        networking=networking,
+    # create relay
+    _relay = Relay(
+        config=_config,
+        networking=_networking,
         message_bus=_message_bus,
         message_factory=_message_factory,
         pixel=pixel
     )
+    # create surveyor
+    _surveyor = Surveyor(_config, _relay.index, _networking, _message_bus, _message_factory)
+    # create gateway
+    _gateway = NetworkGateway(_config, _relay.index, _message_bus, _message_factory, _relay)
+
+    if _relay.index == 0:
+        log.info("establishing initiator…")
+        from initiator import Initiator
+        _initiator = Initiator(_config, _message_bus, _message_factory)
 
     # execution processing via asyncio
     log.info("scheduling relay task and starting event loop…")
-    _relay_node.enable()
-#   asyncio.create_task(_relay_node.run_loop())
+    _relay.enable()
+#   asyncio.create_task(_relay.run_loop())
     # keep the main thread alive or run the main loop hook
 #   asyncio.get_event_loop().run_forever()
     # keep the main thread alive using the MessageBus

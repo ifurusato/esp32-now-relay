@@ -67,6 +67,10 @@ class Event:
                 return event
         return None
 
+    @staticmethod
+    def all():
+        return Event._registry
+
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 # event instances
 
@@ -75,5 +79,6 @@ TOF_DISTANCES = Event(1, 'tof',     priority=0.5)
 SYSTEM        = Event(2, 'system',  priority=1.0)
 STARTUP       = Event(3, 'startup', priority=1.0)
 RELAY         = Event(4, 'relay',   priority=1.0)
+SURVEY        = Event(5, 'survey',  priority=1.0)
 
 #EOF

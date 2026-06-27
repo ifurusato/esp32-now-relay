@@ -7,9 +7,12 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-23
-# modified: 2026-06-23
+# modified: 2026-06-27
+
+import sys
 
 from component import Component
+from direction import Direction
 from logger import Logger, Level
 from event import *
 
@@ -33,10 +36,14 @@ class MessageCodec(Component):
         :param message: the Message instance to encode
         :return: a formatted string ready for transmission
         '''
+        if not isinstance(direction, Direction):
+            raise TypeError('expected Direction argument.')
         _val_str = message.value if message.value is not None else ""
-        return "{}{}{}{}{}{}{}{}{}".format(
-            direction,           self._delimiter,
+        _tnid_str = message.tnid if message.tnid is not None else ""
+        return "{}{}{}{}{}{}{}{}{}{}{}".format(
+            direction.id,        self._delimiter,
             message.id,          self._delimiter,
+            _tnid_str,           self._delimiter,
             message.event.label, self._delimiter,
             _val_str,            self._delimiter,
             message.timestamp
@@ -50,23 +57,29 @@ class MessageCodec(Component):
         :param payload_str: the raw un-encoded string received from the network
         :return: a tuple of (direction, reconstructed_message) or (None, None) if malformed
         '''
-        # split exactly 4 times to safely isolate the 5 expected fields
-        parts = payload_str.split(self._delimiter, 4)
-        if len(parts) < 5:
-            self._log.error('payload string had {} parts rather than 5.'.format(len(parts)))
+        # split exactly 5 times to safely isolate the 6 expected fields
+        parts = payload_str.split(self._delimiter, 5)
+        if len(parts) != 6:
+            self._log.error('payload string had {} parts rather than 6.'.format(len(parts)))
             return None, None
         try:
-            direction   = int(parts[0])
+            direction   = Direction.from_id(int(parts[0]))
             msg_id      = parts[1]
-            event       = Event.by_label(parts[2])
-            raw_value   = parts[3]
-            timestamp   = float(parts[4])
+            raw_tnid    = parts[2]
+            event       = Event.by_label(parts[3])
+            raw_value   = parts[4]
+            timestamp   = int(parts[5])
+            
             value_payload = raw_value if raw_value != "" else None
+            tnid_payload = raw_tnid if raw_tnid != "" else None
+            
             # reconstruct Message instance via factory context
             reconstructed_msg = self._message_factory.create_message(
                 event=event,
                 value=value_payload
             )
+            
+            reconstructed_msg.tnid = tnid_payload
             # explicitly re-apply the tracking state metadata from transport layout
             reconstructed_msg.id = msg_id
             reconstructed_msg.timestamp = timestamp

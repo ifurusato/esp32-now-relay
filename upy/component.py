@@ -11,6 +11,7 @@
 
 from logger import Logger, Level
 from component_registry import ComponentRegistry
+from uuid import UUID, uuid4
 
 class Component:
     __registry = ComponentRegistry() # singleton
@@ -30,6 +31,7 @@ class Component:
         if name is None:
             raise ValueError('null name argument.')
         super().__init__()
+        self._uuid       = uuid4()
         self._name       = name
         self._log        = Logger(name, level)
         self._suppressed = suppressed
@@ -43,6 +45,10 @@ class Component:
     @staticmethod
     def get_registry():
         return Component.__registry
+
+    @property
+    def uuid(self):
+        return self._uuid
 
     @property
     def name(self):

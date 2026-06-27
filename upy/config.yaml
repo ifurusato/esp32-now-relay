@@ -1,48 +1,62 @@
 # ESP32-NOW Relay configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-relay:
-  verbose:         False     # used to limit some console logging traffic, mostly on relay nodes
-  encryption:      False     # enable encrypted transit, requires keys.yaml
-
-  # topology configuration for the ESP32-NOW relay chain
-  # the order of this list strictly defines the relay path (Node 1 -> Node N)
-  devices:
-
-#   - name:        the human-readable name of the node
-#     mac:         the node's MAC address (in quotes)
-#     device:      # optional: only necessary when device type cannot be inferred from machine identifier
-#     enabled:     if False do not include this device in the relay chaine
-
-    - name:        "Node 1 - TinyS3 w antenna"
-      mac:         "dc:54:75:eb:69:c8"
-      enabled:     True
-
-    - name:        "Node 2 - TinyPICO green"
-      mac:         "64:b7:08:90:5c:c4"
-      enabled:     True
-
-    - name:        "Node 3 - Waveshare ESP32-S3 Zero"
-      mac:         "50:78:7d:17:fe:d8"
-      device:      "zero"
-      enabled:     True
-
-    - name:        "Node 4 - TinyPICO light green"
-      mac:         "24:a1:60:75:ba:84"
-      enabled:     False
-
-    - name:        "Node 5 - Waveshare ESP32-S3 Zero"
-      mac:         "24:ec:4a:26:8f:5c"
-      enabled:     False
-      device:      "zero"
-
-    - name:        "Node 6 - TinyPICO red"
-      mac:         "98:cd:ac:d3:41:b8"
-      enabled:     True
-
-    - name:        "Node 7 - FeatherS2"
-      mac:         "7c:df:a1:03:4d:fe"
-      enabled:     True
-
-initiator:
-  pin:             5         # connect pushbutton to IO5
-
+rros:
+    gateway:
+        verbose:           False
+    initiator:
+        pin:                   5       # connect pushbutton to IO5
+    surveyor:
+        verbose:           False
+    relay:
+        verbose:           False       # used to limit some console logging traffic, mostly on relay nodes
+        encryption:        False       # enable encrypted transit, requires keys.yaml
+        routing_strategy:  'intercept' # either 'forward' or 'intercept', latter posts to message bus
+      
+        # topology configuration for the ESP32-NOW relay chain
+        # the order of this list strictly defines the relay path (Node 1 -> Node N)
+        devices:
+      
+#           - id:          the unique ID for the node (used for references); keep <= 4 chars
+#             name:        the human-readable name of the node
+#             mac:         the node's MAC address (in quotes)
+#             device:      # optional: only necessary when device type cannot be inferred from machine identifier
+#             enabled:     if False do not include this device in the relay chaine
+      
+            - id:            "n1"
+              name:          "Node 1 - TinyS3 w antenna"
+              mac:           "dc:54:75:eb:69:c8"
+              enabled:       True
+        
+            - id:            "n2"
+              name:          "Node 2 - TinyPICO green"
+              mac:           "64:b7:08:90:5c:c4"
+              enabled:       False
+        
+            - id:            "n3"
+              name:          "Node 3 - Waveshare ESP32-S3 Zero"
+              mac:           "50:78:7d:17:fe:d8"
+              device:        "zero"
+              enabled:       True
+        
+            - id:            "n4"
+              name:          "Node 4 - TinyPICO light green"
+              mac:           "24:a1:60:75:ba:84"
+              enabled:       False
+        
+            - id:            "n5"
+              name:          "Node 5 - Waveshare ESP32-S3 Zero"
+              mac:           "24:ec:4a:26:8f:5c"
+              enabled:       False
+              device:        "zero"
+        
+            - id:            "n6"
+              name:          "Node 6 - TinyPICO red"
+              mac:           "98:cd:ac:d3:41:b8"
+              enabled:       True
+          
+            - id:            "n7"
+              name:          "Node 7 - FeatherS2"
+              mac:           "7c:df:a1:03:4d:fe"
+              enabled:       True
+    
+#EOF

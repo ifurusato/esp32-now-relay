@@ -7,9 +7,10 @@
 #
 # author:   Ichiro Furusato
 # created:  2019-12-23
-# modified: 2026-06-18
+# modified: 2026-06-26
 
 from colorama import Fore, Style
+from uuid import UUID, uuid4
 
 from component import Component
 from logger import Logger, Level
@@ -43,7 +44,7 @@ class MessageFactory(Component):
             raise ValueError("message value cannot contain the protocol delimiter '{}'".format(MessageCodec.DELIMITER))
         if len(value) > self.MAX_VALUE_LENGTH:
                 raise ValueError("message value exceeds maximum allowable length of {:d} characters".format(self.MAX_VALUE_LENGTH))
-        _message = Message(event=event, value=value)
+        _message = Message(id=uuid4(), event=event, value=value)
         return _message
 
 #EOF

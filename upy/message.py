@@ -7,30 +7,36 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-03-10
-# modified: 2026-06-23
+# modified: 2026-06-26
 
 import time
-from uuid import UUID, uuid4
 
 class Message:
     '''
     A message carrying an Event and an optional value, timestamped at creation
     using ticks_ms.
 
-    Do not create directly: use Publisher.publish() or construct via the bus.
+    If the 'tnid' (target node ID) value has been set, this indicates that the
+    Message recipients are other nodes on the Relay.
 
+    Do not create directly: use the MessageFactory.
+
+    :param id:     the unique message identifier (a UUID)
     :param event:  the Event associated with this message
     :param value:  the optional value payload
     '''
-    def __init__(self, event, value=None):
+    def __init__(self, id, event, value=None):
+        if id is None:
+            raise ValueError('null id argument.')
         if event is None:
             raise ValueError('null event argument.')
-        self._id        = uuid4()
+        self._id        = id
         self._event     = event
         self._value     = value
+        self._tnid      = None # target node ID
         self._timestamp = time.ticks_ms()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def id(self):
@@ -38,7 +44,23 @@ class Message:
 
     @id.setter
     def id(self, value):
+        '''
+        To be used only during deserialisation.
+        '''
         self._id = value
+
+    @property
+    def tnid(self):
+        return self._tnid
+
+    @tnid.setter
+    def tnid(self, value):
+        '''
+        The 'tnid' (target node ID) value can contain a single node identifier,
+        a list of whitespace-delimited node identifiers, or '*' to indicate all.
+        If None this indicates the message is not meant for network transit.
+        '''
+        self._tnid = value
 
     @property
     def event(self):
@@ -64,8 +86,24 @@ class Message:
     def age_ms(self):
         return time.ticks_diff(time.ticks_ms(), self._timestamp)
 
+    def __eq__(self, other):
+        if not isinstance(other, Message):
+            return False
+        return (
+            self._id == other._id
+            and self._event == other._event
+            and self._value == other._value
+            and self._tnid == other._tnid
+            and self._timestamp == other._timestamp
+        )
+
     def __repr__(self):
-        return 'Message[\n  id={},\n  event={},\n  value={},\n  age={}ms\n]'.format(
-                self._id, self._event.label, self.value, self.age_ms)
+        return 'Message[\n  id={},{}\n  event={},\n  value={},\n  timestamp={}ms\n]'.format(
+                self._id,
+                '\n  tnid={}'.format(self._tnid) if self._tnid else '',
+                self._event.label,
+                self.value,
+                self.timestamp
+            )
 
 #EOF

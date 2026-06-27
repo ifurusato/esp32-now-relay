@@ -49,14 +49,17 @@ class MessageBus(Component):
         '''
         Synchronously add a message to the FIFO queue.
         '''
-        self._log.info('publish: {}'.format(message))
+        self._log.debug('publish: {}'.format(message.id))
         self._queue.append(message)
 
     def queue_size(self):
         return len(self._queue)
 
     def queue_empty(self):
-        return len(self._queue) == 0
+        return not self._queue
+
+    def clear_queue(self):
+        self._queue.clear()
 
     def close(self):
         super().close()
@@ -87,7 +90,9 @@ class MessageBus(Component):
         while self.enabled:
             if self._queue:
                 _message = self._queue.pop(0)
+                self._log.debug('consuming message ID: {}; TNID: {}; for {} subscribers.'.format(_message.id, _message.tnid, len(self._subscribers)))
                 for _subscriber in self._subscribers:
+                    self._log.debug('subscriber: {}; active? {}'.format(_subscriber, _subscriber.is_active))
                     if _subscriber.is_active and _subscriber.acceptable(_message):
                         await _subscriber.process_message(_message)
             else:
