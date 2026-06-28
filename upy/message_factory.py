@@ -44,7 +44,8 @@ class MessageFactory(Component):
             raise ValueError("message value cannot contain the protocol delimiter '{}'".format(MessageCodec.DELIMITER))
         if len(value) > self.MAX_VALUE_LENGTH:
                 raise ValueError("message value exceeds maximum allowable length of {:d} characters".format(self.MAX_VALUE_LENGTH))
-        _message = Message(id=uuid4(), event=event, value=value)
+        _uuid = str(uuid4())
+        _message = Message(id=_uuid, event=event, value=value)
         return _message
 
 #EOF

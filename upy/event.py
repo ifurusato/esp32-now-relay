@@ -11,18 +11,18 @@
 
 class Event:
     '''
-    A pseudo-enum representing an event type, with a label and a default priority.
+    A pseudo-enum representing an event type, with a name and a default priority.
 
     :param id:       unique integer identifier
-    :param label:    human-readable label
+    :param name:     human-readable name
     :param priority: default priority, 0.0 (lowest) to 1.0 (highest)
     '''
     _registry = []
     _by_id    = {}
 
-    def __init__(self, id, label, priority=0.5):
+    def __init__(self, id, name, priority=0.5):
         self._id       = id
-        self._label    = label
+        self._name     = name
         self._priority = priority
         Event._registry.append(self)
         Event._by_id[id] = self
@@ -34,8 +34,8 @@ class Event:
         return self._id
 
     @property
-    def label(self):
-        return self._label
+    def name(self):
+        return self._name
 
     @property
     def priority(self):
@@ -52,18 +52,18 @@ class Event:
         return hash(self._id)
 
     def __repr__(self):
-        return 'Event({})'.format(self._label)
+        return 'Event({})'.format(self._name)
 
     @classmethod
-    def by_label(cls, label):
+    def by_name(cls, name):
         '''
-        Looks up and returns an Event instance by its string label using the registry.
+        Looks up and returns an Event instance by its string name using the registry.
         
-        :param label: The string label of the event
+        :param name: The string name of the event
         :return: The matching Event instance, or None if not registered
         '''
         for event in cls._registry:
-            if event.label == label:
+            if event.name == name:
                 return event
         return None
 

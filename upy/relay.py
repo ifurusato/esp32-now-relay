@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-22
-# modified: 2026-06-23
+# modified: 2026-06-28
 
 import sys
 import asyncio
@@ -29,7 +29,7 @@ from message_codec import MessageCodec
 class Relay(Component):
     NAME = 'relay'
     '''
-    Description.
+    A network relay connecting a series of ESP-NOW nodes.
     '''
     def __init__(self, config=None, networking=None, message_bus=None, message_factory=None, pixel=None, level=Level.INFO):
         '''
@@ -74,16 +74,15 @@ class Relay(Component):
             self._log.info('using open transport.')
         # configure relay routing map ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._inbound_name        = None
-        self._outbound_name      = None
+        self._outbound_name       = None
         self._inbound_mac_bytes   = None
-        self._outbound_mac_bytes = None
+        self._outbound_mac_bytes  = None
         self._inbound_mac_str     = None # human-readable MAC address
-        self._outbound_mac_str   = None # human-readable MAC address
-        self._is_initiator         = False
-        self._is_endpoint          = False
-        self._seen_errors          = []
+        self._outbound_mac_str    = None # human-readable MAC address
+        self._is_initiator        = False
+        self._is_endpoint         = False
+        self._seen_errors         = []
         _enabled = self._build_routing_map()
-
         if self._is_endpoint and self._inbound_mac_bytes is None:
             self._log.warn('endpoint error: index={}; inbound: {}; outbound: {}'.format(self._index, self._inbound_mac_bytes, self._outbound_mac_bytes ))
         if self._is_initiator and self._outbound_mac_bytes is None:
@@ -102,7 +101,6 @@ class Relay(Component):
     def index(self):
         '''
         Return the index number of this device within the relay.
-
         Note that this is 0-based, i.e., node 1's index is 0.
         '''
         return self._index
@@ -111,7 +109,6 @@ class Relay(Component):
     def inbound_mac(self):
         '''
         Return the MAC address of the inbound device in the relay as a human-readable string.
-
         This can be converted to a bytes object via mac_to_bytes().
         '''
         return self._inbound_mac_str
@@ -127,7 +124,6 @@ class Relay(Component):
     def outbound_mac(self):
         '''
         Return the MAC address of the outbound device in the relay as a human-readable string.
-
         This can be converted to a bytes object via mac_to_bytes().
         '''
         return self._outbound_mac_str
@@ -162,8 +158,8 @@ class Relay(Component):
         V2.0 messages of 1470 bytes rather than the 250 bytes of V1.0.
         This also serves as a health status ping.
         '''
-        self._log.info('start node survey…')
         self._show_color(COLOR_AMBER)
+        await asyncio.sleep_ms(50)
         _registry = Component.get_registry()
         _surveyor = _registry.get("sub:{}".format(Surveyor.NAME))
         if _surveyor:
@@ -355,23 +351,19 @@ class Relay(Component):
             if self._verbose:
                 self._log.info('sending message in direction: {}.'.format(direction.name))
             ok = self._espnow.send(peer, encoded_payload)
-            if not ok:
-                if peer == self._inbound_mac_bytes:
-                    self._log.error("error sending message to inbound peer '{}': {}".format(self._inbound_name, self._inbound_mac_str))
-                    # not recoverable as we can't get back to initiator
-                elif peer == self._outbound_mac_bytes:
-                    self._log.error("error sending message to outbound peer '{}': {}".format(self._outbound_name, self._outbound_mac_str))
-                    # send error message back to initiator
-                    self._handle_routing_failure(message)
-
-        except Exception as e:
-            self._log.error("{} raised sending message to peer: '{}': {}".format(type(e), peer, e))
-            sys.print_exception(e)
-        finally:
             if ok:
                 self._log.debug('message was sent.')
             else:
                 self._log.warn('message was not sent.')
+                if peer == self._inbound_mac_bytes:
+                    self._log.error("error sending message to inbound peer '{}': {}".format(self._inbound_name, self._inbound_mac_str))
+                    # not recoverable as we can't get back to initiator
+                elif peer == self._outbound_mac_bytes:
+                    # send error message back to initiator
+                    self._handle_routing_failure(message)
+        except Exception as e:
+            self._log.error("{} raised sending message to peer: '{}': {}".format(type(e), peer, e))
+            sys.print_exception(e)
 
     def _handle_routing_failure(self, message):
         '''
@@ -386,17 +378,22 @@ class Relay(Component):
         self._seen_errors.append(message.id)
         if len(self._seen_errors) > 20:
             self._seen_errors.pop(0)
-        _value = "DELIVERY FAILURE: id={}; event={}; outbound peer: {}; MAC={}".format(
-                message.id, 
-                message.event.label, 
+        _value = "sending message to outbound peer '{}' at MAC: {}'{}'\n{}{}".format(
                 self._outbound_name, 
-                self._outbound_mac_str)
-        self._log.info('sending error message to initiator: ' + Fore.YELLOW + '{}'.format(_value))
-        _error_message = self._message_factory.create_message(event=FAILURE, value=_value)
-        _error_message.id = message.id # error message shares ID with original
-        self.send_message(self._inbound_mac_bytes, INBOUND, _error_message)
+                Fore.GREEN,
+                self._outbound_mac_str,
+                Fore.CYAN + Style.DIM,
+                message
+            )
+        if self._is_initiator:
+            self._log.error('routing error: {}'.format(_value))
+            self._show_color(COLOR_RED)
+        else:
+            self._log.info('sending error message to initiator: ' + Fore.YELLOW + '{}'.format(_value))
+            message.event = FAILURE
+            self.send_message(self._inbound_mac_bytes, INBOUND, message)
 
-    def process_endpoint_logic(self, message):
+    def _process_endpoint_logic(self, message):
         '''
         Executes operations on the last Node and returns it to the outbound handler.
         This currently prepends "ack:" to the message value.
@@ -410,7 +407,7 @@ class Relay(Component):
         self._log.info('endpoint message: ' + Fore.GREEN + '{}'.format(response_value))
         return message
 
-    def handle_outbound(self, message):
+    def _handle_outbound(self, message):
         '''
         Handles messages moving down the chain toward the endpoint (the last node in the sequence).
 
@@ -431,7 +428,7 @@ class Relay(Component):
         elif self._is_endpoint:
             _note = 'at endpoint'
             # if this is the endpoint we do any endpoint processing
-            message = self.process_endpoint_logic(message)
+            message = self._process_endpoint_logic(message)
             peer = self._inbound_mac_bytes
         else:
             _note = 'in transit'
@@ -458,7 +455,7 @@ class Relay(Component):
             self._log.error("mysterious error.")
             self._led_task = asyncio.create_task(self._flash_led(COLOR_RED, 3000))
 
-    def handle_inbound(self, message):
+    def _handle_inbound(self, message):
         '''
         Handles messages moving up the chain back toward the initiator (Node 1).
 
@@ -492,9 +489,9 @@ class Relay(Component):
                     direction, reconstructed_msg = self._message_codec.deserialize(decoded_msg)
 #                   self._log.debug("reconstructed message: '{}'".format(reconstructed_msg))
                     if direction is OUTBOUND:
-                        self.handle_outbound(reconstructed_msg)
+                        self._handle_outbound(reconstructed_msg)
                     elif direction is INBOUND:
-                        self.handle_inbound(reconstructed_msg)
+                        self._handle_inbound(reconstructed_msg)
                 except Exception as e:
                     self._log.error('error in relay: {}'.format(e))
                     sys.print_exception(e)

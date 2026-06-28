@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-03-10
-# modified: 2026-06-26
+# modified: 2026-06-28
 
 import time
 
@@ -66,6 +66,10 @@ class Message:
     def event(self):
         return self._event
 
+    @event.setter
+    def event(self, value):
+        self._event = value
+
     @property
     def value(self):
         return self._value
@@ -101,7 +105,7 @@ class Message:
         return 'Message[\n  id={},{}\n  event={},\n  value={},\n  timestamp={}ms\n]'.format(
                 self._id,
                 '\n  tnid={}'.format(self._tnid) if self._tnid else '',
-                self._event.label,
+                self._event.name,
                 self.value,
                 self.timestamp
             )

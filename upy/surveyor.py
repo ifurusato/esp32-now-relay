@@ -84,7 +84,9 @@ class Surveyor(Publisher, Subscriber):
             for id, value in sorted(result.items()):
                 if value == 1:
                     _is_v2_compatible = False  
-                self._log.info("  node {}: ".format(id) + Fore.GREEN + "V{}".format(value))
+                    self._log.info("  node {}: ".format(id) + Fore.GREEN + "V{}".format(value))
+                else:
+                    self._log.info("  node {}: ".format(id) + Fore.GREEN + Style.BRIGHT + "V{}".format(value))
             self._is_v2_compatible = _is_v2_compatible
             if self._is_v2_compatible:
                 self._log.info('using ESP-NOW V2.0: compatible across all nodes.')

@@ -24,7 +24,7 @@ from logger import Logger, Level
 class NetworkGateway(Publisher, Subscriber):
     NAME = 'gateway'
     '''
-    Description.
+    A gateway between the network relay and the local message bus.
     '''
     def __init__(self, config=None, index=-1, message_bus=None, message_factory=None, relay=None, level=Level.INFO):
         Publisher.__init__(self, name=NetworkGateway.NAME, message_bus=message_bus, message_factory=message_factory, level=level, _init_base=False)
@@ -34,12 +34,15 @@ class NetworkGateway(Publisher, Subscriber):
         _cfg = config['rros']['gateway']
         self._verbose = _cfg['verbose']
         self._index = index
+        self._relay = relay
         self._is_initiator = self._index == 0
         self.add_events(Event.all())
-        self._relay = relay
-        self._queue = deque([], 10)
         self._inbound_mac_bytes   = self._relay.inbound_mac_bytes
         self._outbound_mac_bytes = self._relay.outbound_mac_bytes
+        self._queue = deque([], 10)
+        # elapsed time trackers
+        self._pending_trackers = {}
+        self._max_capacity = 20
         self._log.info('ready.')
 
     # publisher  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -87,22 +90,35 @@ class NetworkGateway(Publisher, Subscriber):
     # relay ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _receive_message(self, message):
-        if self._send_time_ms is not None:
-            rtt_ms = time.ticks_diff(time.ticks_ms(), self._send_time_ms)
-            self._send_time_ms = None
-            self._log.info("round trip: {}ms elapsed on message:\n{}{}".format(rtt_ms, Style.DIM, message))
-            if message.event is FAILURE:
-                self._log.info("inbound message indicates error: " + Fore.RED + "'{}'".format(message.value))
+        '''
+        The callback on inbound messages.
+        '''
+        _send_time = self._pending_trackers.pop(message.id, None)
+        if _send_time is not None:
+            _elapsed_ms = time.ticks_diff(time.ticks_ms(), _send_time)
+            self._log.info("round trip: " 
+                    + Fore.GREEN
+                    + "{}ms ".format(_elapsed_ms) 
+                    + Fore.CYAN
+                    + "elapsed on message: " 
+                    + Fore.GREEN
+                    + "{} / {}".format(message.event.name, message.id)
+                )
+        else:
+            self._log.warn("unable to determine round trip elapsed time; {} trackers.".format(len(self._pending_trackers)))
+
+        if message.event is FAILURE:
+            self._log.info("inbound message indicates error: " + Fore.RED + "'{}'".format(message.value))
+        else:
+            # if initiator node, we remove tnid and push to message bus
+            if self._is_initiator:
+                self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value) 
+                        + Fore.CYAN + '; publishing to message bus…')
+                message.tnid = None
+                self._message_bus.publish(message)
             else:
-                # if initiator node, we remove tnid and push to message bus
-                if self._is_initiator:
-                    self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value) 
-                            + Fore.CYAN + '; publishing to message bus…')
-                    message.tnid = None
-                    self._message_bus.publish(message)
-                else:
-                    self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value)
-                            + Fore.CYAN + Style.BRIGHT + '; stop.')
+                self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value)
+                        + Fore.CYAN + Style.BRIGHT + '; stop.')
 
     def publish_to_relay(self, direction, message):
         if not isinstance(direction, Direction):
@@ -112,7 +128,15 @@ class NetworkGateway(Publisher, Subscriber):
         value = message.value
         if self._verbose:
             self._log.info("sending message '{}'…".format(value))
-        self._send_time_ms = time.ticks_ms()
+
+        # outbound message tracking
+        if len(self._pending_trackers) >= self._max_capacity:
+            # pop oldest entry
+            self._log.warn("popping oldest entry from {} trackers…".format(len(self._pending_trackers)))
+            self._pending_trackers.pop(next(iter(self._pending_trackers)))
+        self._pending_trackers[message.id] = time.ticks_ms()
+#       self._log.debug("adding message ID of type '{}' to trackers.".format(type(message.id), len(self._pending_trackers)))
+
         if direction is OUTBOUND and self._outbound_mac_bytes:
             if self._verbose:
                 self._log.info("outbound message: " + Fore.GREEN + "'{}'".format(value))

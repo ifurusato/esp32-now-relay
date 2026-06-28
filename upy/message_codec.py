@@ -44,7 +44,7 @@ class MessageCodec(Component):
             direction.id,        self._delimiter,
             message.id,          self._delimiter,
             _tnid_str,           self._delimiter,
-            message.event.label, self._delimiter,
+            message.event.name,  self._delimiter,
             _val_str,            self._delimiter,
             message.timestamp
         )
@@ -66,7 +66,7 @@ class MessageCodec(Component):
             direction   = Direction.from_id(int(parts[0]))
             msg_id      = parts[1]
             raw_tnid    = parts[2]
-            event       = Event.by_label(parts[3])
+            event       = Event.by_name(parts[3])
             raw_value   = parts[4]
             timestamp   = int(parts[5])
             

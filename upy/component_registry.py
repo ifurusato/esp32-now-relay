@@ -102,8 +102,8 @@ class ComponentRegistry:
             raise TypeError('argument \'{}\' is not a component.'.format(type(component)))
         else:
             self._dict[component.name] = component
-#           if self._verbose:
-            self._log.info(Style.DIM + 'added \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
+            if self._verbose:
+                self._log.info(Style.DIM + 'added \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
 
     def has(self, name):
         '''
