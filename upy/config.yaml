@@ -7,10 +7,16 @@ rros:
         pin:                   5       # connect pushbutton to IO5
     surveyor:
         verbose:           False
+    touch_publisher:
+        active:             True       # when False disable publishing
+        verbose:            True
+        poll_interval_ms:     50
+        debounce_delay_ms:   333
     relay:
         verbose:           False       # used to limit some console logging traffic, mostly on relay nodes
         encryption:        False       # enable encrypted transit, requires keys.yaml
         routing_strategy:  'intercept' # either 'forward' or 'intercept', latter posts to message bus
+        enable_pixel:      False       # if True, use pixel to indicate status
       
         # topology configuration for the ESP32-NOW relay chain
         # the order of this list strictly defines the relay path (Node 1 -> Node N)
@@ -23,8 +29,8 @@ rros:
 #             enabled:     if False do not include this device in the relay chaine
       
             - id:            "n1"
-              name:          "Node 1 - TinyS3 w antenna"
-              mac:           "dc:54:75:eb:69:c8"
+              name:          "Node 1 - TinyPICO Explorer"
+              mac:           "24:a1:60:75:ba:84"
               enabled:       True
         
             - id:            "n2"
@@ -36,27 +42,27 @@ rros:
               name:          "Node 3 - Waveshare ESP32-S3 Zero"
               mac:           "50:78:7d:17:fe:d8"
               device:        "zero"
-              enabled:       True
+              enabled:       False
         
             - id:            "n4"
-              name:          "Node 4 - TinyPICO light green"
-              mac:           "24:a1:60:75:ba:84"
-              enabled:       False
+              name:          "Node 4 - FeatherS2"
+              mac:           "7c:df:a1:03:4d:fe"
+              enabled:       True
         
             - id:            "n5"
               name:          "Node 5 - Waveshare ESP32-S3 Zero"
               mac:           "24:ec:4a:26:8f:5c"
-              enabled:       False
               device:        "zero"
+              enabled:       False
         
             - id:            "n6"
               name:          "Node 6 - TinyPICO red"
               mac:           "98:cd:ac:d3:41:b8"
-              enabled:       True
+              enabled:       False
           
             - id:            "n7"
-              name:          "Node 7 - FeatherS2"
-              mac:           "7c:df:a1:03:4d:fe"
+              name:          "Node 7 - TinyS3 w antenna"
+              mac:           "dc:54:75:eb:69:c8"
               enabled:       True
     
 #EOF

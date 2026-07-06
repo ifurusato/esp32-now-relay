@@ -32,7 +32,7 @@ class NetworkGateway(Publisher, Subscriber):
         if config is None:
             raise TypeError('configuration argument is null.')
         _cfg = config['rros']['gateway']
-        self._verbose = _cfg['verbose']
+        self._verbose = True # _cfg['verbose']
         self._index = index
         self._relay = relay
         self._is_initiator = self._index == 0
@@ -61,6 +61,11 @@ class NetworkGateway(Publisher, Subscriber):
     # subscriber ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     async def process_message(self, message):
+        '''
+        Processes an incoming message, adding it to the queue (to avoid
+        duplicate processing) and publishing it to the Relay if its tnid
+        value is non-null.
+        '''
         acknowledged = message.value.startswith('ack:')
         if message in self._queue:
             self._log.debug("ignoring already-published message: '{}'".format(message.id))
@@ -69,7 +74,7 @@ class NetworkGateway(Publisher, Subscriber):
             self._log.debug("processing message: " + Fore.GREEN + "'{}'…".format(message.id))
         if message.event is FAILURE:
             self._log.error("inbound message indicates error: " + Fore.RED + "'{}'".format(message.value))
-        elif message.tnid:
+        elif message.tnid is not None:
             if self._verbose:
                 self._log.info("publishing message: "
                         + Fore.GREEN + "'{}'".format(message.value)
@@ -106,21 +111,20 @@ class NetworkGateway(Publisher, Subscriber):
                 )
         else:
             self._log.warn("unable to determine round trip elapsed time; {} trackers.".format(len(self._pending_trackers)))
-
-        if message.event is FAILURE:
-            self._log.info("inbound message indicates error: " + Fore.RED + "'{}'".format(message.value))
+        # if initiator node, we remove tnid and push to local message bus
+        if self._is_initiator:
+            self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value) 
+                    + Fore.CYAN + '; publishing to message bus…')
+            message.tnid = None
+            self._message_bus.publish(message)
         else:
-            # if initiator node, we remove tnid and push to message bus
-            if self._is_initiator:
-                self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value) 
-                        + Fore.CYAN + '; publishing to message bus…')
-                message.tnid = None
-                self._message_bus.publish(message)
-            else:
-                self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value)
-                        + Fore.CYAN + Style.BRIGHT + '; stop.')
+            self._log.info("inbound message: " + Fore.GREEN + "'{}'".format(message.value)
+                    + Fore.CYAN + Style.BRIGHT + '; stop.')
 
     def publish_to_relay(self, direction, message):
+        '''
+        Publishes the inbound or outbound message to the Relay.
+        '''
         if not isinstance(direction, Direction):
             raise TypeError('expected direction argument.')
         if not isinstance(message, Message):
@@ -132,7 +136,7 @@ class NetworkGateway(Publisher, Subscriber):
         # outbound message tracking
         if len(self._pending_trackers) >= self._max_capacity:
             # pop oldest entry
-            self._log.warn("popping oldest entry from {} trackers…".format(len(self._pending_trackers)))
+#           self._log.debug("popping oldest entry from {} trackers…".format(len(self._pending_trackers)))
             self._pending_trackers.pop(next(iter(self._pending_trackers)))
         self._pending_trackers[message.id] = time.ticks_ms()
 #       self._log.debug("adding message ID of type '{}' to trackers.".format(type(message.id), len(self._pending_trackers)))

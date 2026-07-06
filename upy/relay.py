@@ -44,11 +44,12 @@ class Relay(Component):
         self._pixel = pixel
         # load device list from configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = self._config['rros']['relay']
-        self._verbose = _cfg['verbose']
+        self._verbose = True # _cfg['verbose']
         _strategy = _cfg['routing_strategy']
         self._routing_strategy = FORWARD if _strategy == 'forward' else INTERCEPT
         self._log.info('routing strategy: ' + Fore.GREEN + '{}'.format('forward immediately' if _strategy == 'forward' else 'intercept locally'))
         self._device_list = _cfg['devices']
+        self._enable_pixel = _cfg['enable_pixel']
         self._total_devices = len(self._device_list)
         self._local_mac_str = self._networking.mac_address
         self._log.info('device MAC address: ' + Fore.GREEN + '{}'.format(self._local_mac_str))
@@ -96,6 +97,18 @@ class Relay(Component):
             self._log.info('ready.')
         else:
             self._log.info('ready in disabled state.')
+
+    def is_initiator(self):
+        '''
+        Return true if this node is the initiator, the first node in the relay.
+        '''
+        return self._is_initiator
+
+    def is_endpoint(self):
+        '''
+        Return true if this node is the endpoint, the last node in the relay.
+        '''
+        return self._is_endpoint
 
     @property
     def index(self):
@@ -163,6 +176,8 @@ class Relay(Component):
         _registry = Component.get_registry()
         _surveyor = _registry.get("sub:{}".format(Surveyor.NAME))
         if _surveyor:
+            if self._is_endpoint:
+                _surveyor.set_is_endpoint()
             _ok = _surveyor.send(self._show_color)
             # give the survey some time to complete…
             await asyncio.sleep_ms(duration_ms)
@@ -422,19 +437,23 @@ class Relay(Component):
             self._led_task.cancel()
         _direction = INBOUND if self._is_endpoint else OUTBOUND
         _note = ''
+        _color = ''
         if self._is_initiator:
+            _color = Fore.WHITE
             _note = 'at initiator'
             peer = self._outbound_mac_bytes
         elif self._is_endpoint:
+            _color = Fore.GREEN
             _note = 'at endpoint'
             # if this is the endpoint we do any endpoint processing
             message = self._process_endpoint_logic(message)
             peer = self._inbound_mac_bytes
         else:
+            _color = Fore.BLUE
             _note = 'in transit'
             peer = self._outbound_mac_bytes
         if self._verbose:
-            self._log.info('handling outbound message {}: {}'.format(_note, message))
+            self._log.info('handling outbound message {}{}:{} {}'.format(_color, _note, Fore.CYAN, message))
 
         # under either strategy we publish to the MessageBus
         self._message_bus.publish(message)
@@ -520,7 +539,7 @@ class Relay(Component):
         '''
         Set the color of the pixel.
         '''
-        if self._pixel:
+        if self._pixel and self._enable_pixel:
             self._pixel.show_color(color)
 
     async def _flash_led(self, color, duration_ms=1000):

@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2020-11-10
-# modified: 2026-06-04
+# modified: 2026-06-28
 
 import asyncio
 from colorama import Fore, Style
@@ -17,14 +17,25 @@ from component import Component
 
 class MessageBus(Component):
     NAME = 'msg-bus'
+    _instance = None
     '''
-    A simplified asynchronous message bus. Messages are published synchronously
-    to a list-backed FIFO queue and consumed asynchronously, delivering each
-    message to all enabled, accepting subscribers.
+    A singleton asynchronous publish-and-subscribe message bus. Messages
+    are published synchronously to a list-backed FIFO queue and consumed
+    asynchronously, delivering each message to all enabled, accepting
+    subscribers.
 
     :param level: the logging level
     '''
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(MessageBus, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self, level=Level.INFO):
+        if self._initialized:
+            return
+        self._initialized = True
         Component.__init__(self, MessageBus.NAME, suppressed=False, enabled=False)
         self._queue       = []
         self._subscribers = []

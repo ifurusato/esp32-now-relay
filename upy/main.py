@@ -154,14 +154,27 @@ try:
         pixel=pixel
     )
     # create surveyor
+    log.info("creating surveyor…")
     _surveyor = Surveyor(_config, _relay.index, _networking, _message_bus, _message_factory)
     # create gateway
     _gateway = NetworkGateway(_config, _relay.index, _message_bus, _message_factory, _relay)
 
-    if _relay.index == 0:
+    if _relay.is_initiator():
         log.info("establishing initiator…")
         from initiator import Initiator
         _initiator = Initiator(_config, _message_bus, _message_factory)
+
+        log.info("creating touch publisher…")
+        from touch_publisher import TouchPublisher
+
+        _touch = TouchPublisher(_config, _message_bus, _message_factory)
+        _touch.enable()
+    elif _relay.is_endpoint():
+        log.info("creating touch subscriber…")
+        from touch_subscriber import TouchSubscriber
+
+        _touch = TouchSubscriber(_config, pixel, _message_bus)
+        _touch.enable()
 
     # execution processing via asyncio
     log.info("scheduling relay task and starting event loop…")

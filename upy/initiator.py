@@ -16,7 +16,7 @@ from logger import Logger, Level
 from event import *
 from publisher import Publisher
 from push_button import PushButton
-from food_name_generator import FoodNameGenerator
+from text_generator import TextGenerator
 
 class Initiator(Publisher):
     NAME = 'initiator'
@@ -43,7 +43,10 @@ class Initiator(Publisher):
         Triggered by the button press.
         '''
         # use sample value
-        value = FoodNameGenerator.generate()
+        if self._message_factory.espnow_version == 2:
+            value = TextGenerator.generate_lorem_ipsum(1200)
+        else:
+            value = TextGenerator.generate_food_name()
         message = self._message_factory.create_message(event=RELAY, value=value)
         message.tnid = '*' # set node target(s) to ALL
         self._log.info("publishing message ID: {}; tnid: {}".format(message.id, message.tnid))

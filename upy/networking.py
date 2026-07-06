@@ -71,7 +71,7 @@ class Networking:
         '''
         This method is called by the Surveyor if all nodes are ESP-NOW V2.0 compatible.
         '''
-        self._log.info('Using ESP-NOW V2.0: compatible across all nodes.')
+        self._log.info('Using ESP-NOW V2.0.')
         self._espnow_v2_compatible = True
 
     def stats(self):

@@ -6,6 +6,13 @@ This provides a means of interconnecting a configured relay of ESP32
 devices via ESP32-NOW, so that messages may be sent back and forth
 across the relay. Encrypted communication between nodes is supported.
 
+.. figure:: ./img/espnow-relay-arch-v1.png
+   :width: 1200px
+   :align: center
+   :height: 686px
+   :alt: ESP-NOW Relay Architecture
+
+   ESP-NOW Relay Architecture
 
 Features
 --------
