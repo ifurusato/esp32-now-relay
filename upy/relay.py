@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-22
-# modified: 2026-06-28
+# modified: 2026-07-06
 
 import sys
 import asyncio
@@ -18,7 +18,6 @@ from colorama import Fore, Style
 from colors import *
 from event import *
 from direction import *
-from routing_strategy import *
 from logger import Logger, Level
 from component import Component
 from component_registry import ComponentRegistry
@@ -30,30 +29,24 @@ class Relay(Component):
     NAME = 'relay'
     '''
     A network relay connecting a series of ESP-NOW nodes.
+
+    From existing networking sets up inbound and outbound peers, with or without encryption.
     '''
-    def __init__(self, config=None, networking=None, message_bus=None, message_factory=None, pixel=None, level=Level.INFO):
-        '''
-        From existing networking sets up inbound and outbound peers, with or without encryption.
-        '''
+    def __init__(self, config=None, networking=None, message_factory=None, pixel=None, level=Level.INFO):
         Component.__init__(self, Relay.NAME, suppressed=False, enabled=False, level=level)
         self._config          = config
         self._networking      = networking
-        self._message_bus     = message_bus
-        self._message_factory = message_factory
         self._message_codec   = MessageCodec(message_factory, level)
         self._pixel = pixel
         # load device list from configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = self._config['rros']['relay']
         self._verbose = True # _cfg['verbose']
-        _strategy = _cfg['routing_strategy']
-        self._routing_strategy = FORWARD if _strategy == 'forward' else INTERCEPT
-        self._log.info('routing strategy: ' + Fore.GREEN + '{}'.format('forward immediately' if _strategy == 'forward' else 'intercept locally'))
         self._device_list = _cfg['devices']
         self._enable_pixel = _cfg['enable_pixel']
         self._total_devices = len(self._device_list)
         self._local_mac_str = self._networking.mac_address
         self._log.info('device MAC address: ' + Fore.GREEN + '{}'.format(self._local_mac_str))
-        self.print_configuration()
+        self._print_configuration()
         # find this device's position in catalog ┈┈┈┈┈┈┈┈┈┈┈
         self._index, local_device = Relay.find_device_by_mac(self._device_list, self._local_mac_str)
         if self._index is None:
@@ -97,6 +90,9 @@ class Relay(Component):
             self._log.info('ready.')
         else:
             self._log.info('ready in disabled state.')
+
+    def set_gateway(self, gateway):
+        self._gateway = gateway
 
     def is_initiator(self):
         '''
@@ -164,30 +160,136 @@ class Relay(Component):
         else:
             self._log.warn('already enabled.')
 
-    async def _survey(self, duration_ms=1000):
+    def set_receive_callback(self, callback):
+        self._rx_callback = callback
+
+    def send_message(self, peer, direction, message):
         '''
-        Sends a message across the relay to survey each node's installed
-        ESP-NOW supported version to determine if it's possible to send
-        V2.0 messages of 1470 bytes rather than the 250 bytes of V1.0.
-        This also serves as a health status ping.
+        Serializes an existing Message instance and transmits it over the network.
         '''
-        self._show_color(COLOR_AMBER)
-        await asyncio.sleep_ms(50)
-        _registry = Component.get_registry()
-        _surveyor = _registry.get("sub:{}".format(Surveyor.NAME))
-        if _surveyor:
-            if self._is_endpoint:
-                _surveyor.set_is_endpoint()
-            _ok = _surveyor.send(self._show_color)
-            # give the survey some time to complete…
-            await asyncio.sleep_ms(duration_ms)
-            if _ok:
-                self._show_color(COLOR_TANGERINE)
+        if not isinstance(peer, bytes):
+            raise TypeError('was passed {} rather than bytes object.'.format(type(peer)))
+        if not isinstance(direction, Direction):
+            raise TypeError('was passed {} rather than Direction object.'.format(type(direction)))
+        if self._verbose:
+            self._log.info('sending message in {} direction: {}'.format(direction, message))
+        payload = self._message_codec.serialize(direction, message)
+        ok = False
+        try:
+            encoded_payload = payload.encode('utf-8')
+            payload_len = len(encoded_payload)
+            if self._verbose:
+                self._log.info('sending message in direction: {}.'.format(direction.name))
+            ok = self._espnow.send(peer, encoded_payload)
+            if ok:
+                self._log.debug('message was sent.')
             else:
-                self._show_color(COLOR_RED)
+                self._log.warn('message was not sent.')
+                if peer == self._inbound_mac_bytes:
+                    self._log.error("error sending message to inbound peer '{}': {}".format(self._inbound_name, self._inbound_mac_str))
+                    # not recoverable as we can't get back to initiator
+                elif peer == self._outbound_mac_bytes:
+                    # send error message back to initiator
+                    self._handle_routing_failure(message)
+        except Exception as e:
+            self._log.error("{} raised sending message to peer: '{}': {}".format(type(e), peer, e))
+            sys.print_exception(e)
+
+    def _process_endpoint_logic(self, message):
+        '''
+        Executes operations on the last Node and returns it to the outbound handler.
+        This currently prepends "ack:" to the message value.
+        '''
+        if self._verbose:
+            self._log.info('processing endpoint logic for message: '
+                    + Fore.GREEN + '{}'.format(message))
+        # prepend 'ack:' to string
+        response_value = "ack:{}".format(message.value)
+        message.value = response_value
+        self._log.info('endpoint message: ' + Fore.GREEN + '{}'.format(response_value))
+        return message
+
+    def _handle_outbound(self, message):
+        '''
+        Handles messages moving down the chain toward the endpoint (the last node in the sequence).
+
+        Depending on the routing strategy, messages are either intercepted by the local MessageBus,
+        which may or may not re-send back to the Relay. or sent to the MessageBus but immediately
+        passed on to the next node. 
+
+        Note with the latter that if the local node re-introduces the Message to the Relay it may
+        be a duplicate.
+        '''
+        if self._led_task:
+            self._led_task.cancel()
+        _direction = INBOUND if self._is_endpoint else OUTBOUND
+        _note = ''
+        _color = ''
+        if self._is_initiator:
+            _color = Fore.WHITE
+            _note = 'at initiator'
+            peer = self._outbound_mac_bytes
+        elif self._is_endpoint:
+            _color = Fore.GREEN
+            _note = 'at endpoint'
+            # if this is the endpoint we do any endpoint processing
+            message = self._process_endpoint_logic(message)
+            peer = self._inbound_mac_bytes
         else:
-            self._show_color(COLOR_RED)
-            self._log.warn('no surveyor available.')
+            _color = Fore.BLUE
+            _note = 'in transit'
+            peer = self._outbound_mac_bytes
+        if self._verbose:
+            self._log.info('handling outbound message {}{}:{} {}'.format(_color, _note, Fore.CYAN, message))
+
+        # we pass the message to the gateway
+        self._gateway.receive_from_relay(message)
+        self._led_task = asyncio.create_task(self._flash_led(COLOR_DEEP_FUCHSIA, 3000))
+
+    def _handle_inbound(self, message):
+        '''
+        Handles messages moving up the chain back toward the initiator (Node 1).
+
+        Messages in this reverse direction are never intercepted by the local MessageBus
+        as their intended purpose is acknowledgement to the initiator.
+        '''
+        if self._inbound_mac_bytes:
+            if self._verbose:
+                self._log.info('handling inbound message: {}'.format(message))
+            self._led_task = asyncio.create_task(self._flash_led(COLOR_APPLE, 500))
+            self.send_message(self._inbound_mac_bytes, INBOUND, message)
+        else:
+            if self._verbose:
+                self._log.info("initiator received ricochet response: {}".format(repr(message)))
+            if self._rx_callback:
+                self._rx_callback(message)
+            self._led_task = asyncio.create_task(self._flash_led(COLOR_EMERALD, 3000))
+
+    async def _run_loop(self):
+        '''
+        Asynchronous polling loop that processes incoming packets without blocking.
+        '''
+        while True:
+            # check for incoming ESP-NOW packets
+            host, encoded_message = self._espnow.recv()
+            if encoded_message is not None:
+#               self._log.debug("received message: '{}'".format(encoded_message))
+                try:
+                    decoded_msg = encoded_message.decode('utf-8')
+#                   self._log.debug("decoded message: '{}'".format(decoded_msg))
+                    direction, reconstructed_msg = self._message_codec.deserialize(decoded_msg)
+#                   self._log.debug("reconstructed message: '{}'".format(reconstructed_msg))
+                    if direction is OUTBOUND:
+                        self._handle_outbound(reconstructed_msg)
+                    elif direction is INBOUND:
+                        self._handle_inbound(reconstructed_msg)
+                except Exception as e:
+                    self._log.error('error in relay: {}'.format(e))
+                    sys.print_exception(e)
+            # yield control back to the asyncio scheduler
+            await asyncio.sleep_ms(5)
+
+    # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _load_encryption_keys(self):
         '''
@@ -218,25 +320,6 @@ class Relay(Component):
             self._log.error('cannot enable encryption: {} raised reading {} file: {}'.format(type(e), keys_filename, e))
             self._encryption_enabled = False
             self._log.info(Fore.WHITE + Style.BRIGHT + 'using open transport.')
-
-    def print_configuration(self):
-        self._log.info('loaded configuration for ' + Fore.GREEN + '{} devices:'.format(self._total_devices))
-        for i, device in enumerate(self._device_list):
-            num = i + 1
-            id = device.get('id')
-            name = device.get('name')
-            mac_address = device.get('mac')
-            enabled = device.get('enabled')
-            if not enabled:
-                self._log.info(Style.DIM 
-                        + "[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
-            elif mac_address == self._local_mac_str.lower():
-                self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) + Style.BRIGHT
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
-            else:
-                self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
 
     def _add_neighbor_peer(self, direction, mac_bytes, mac_str):
         '''
@@ -345,40 +428,34 @@ class Relay(Component):
         self._log.info("  └─ Downstream: {}{}".format(Fore.GREEN, self._outbound_name))
         return _enabled
 
-    def set_receive_callback(self, callback):
-        self._rx_callback = callback
+    # survey ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    def send_message(self, peer, direction, message):
+    async def _survey(self, duration_ms=1000):
         '''
-        Serializes an existing Message instance and transmits it over the network.
+        Sends a message across the relay to survey each node's installed
+        ESP-NOW supported version to determine if it's possible to send
+        V2.0 messages of 1470 bytes rather than the 250 bytes of V1.0.
+        This also serves as a health status ping.
         '''
-        if not isinstance(peer, bytes):
-            raise TypeError('was passed {} rather than bytes object.'.format(type(peer)))
-        if not isinstance(direction, Direction):
-            raise TypeError('was passed {} rather than Direction object.'.format(type(direction)))
-        if self._verbose:
-            self._log.info('sending message in {} direction: {}'.format(direction, message))
-        payload = self._message_codec.serialize(direction, message)
-        ok = False
-        try:
-            encoded_payload = payload.encode('utf-8')
-            payload_len = len(encoded_payload)
-            if self._verbose:
-                self._log.info('sending message in direction: {}.'.format(direction.name))
-            ok = self._espnow.send(peer, encoded_payload)
-            if ok:
-                self._log.debug('message was sent.')
+        self._show_color(COLOR_AMBER)
+        await asyncio.sleep_ms(50)
+        _registry = Component.get_registry()
+        _surveyor = _registry.get("sub:{}".format(Surveyor.NAME))
+        if _surveyor:
+            if self._is_endpoint:
+                _surveyor.set_is_endpoint()
+            _ok = _surveyor.send(self._show_color)
+            # give the survey some time to complete…
+            await asyncio.sleep_ms(duration_ms)
+            if _ok:
+                self._show_color(COLOR_TANGERINE)
             else:
-                self._log.warn('message was not sent.')
-                if peer == self._inbound_mac_bytes:
-                    self._log.error("error sending message to inbound peer '{}': {}".format(self._inbound_name, self._inbound_mac_str))
-                    # not recoverable as we can't get back to initiator
-                elif peer == self._outbound_mac_bytes:
-                    # send error message back to initiator
-                    self._handle_routing_failure(message)
-        except Exception as e:
-            self._log.error("{} raised sending message to peer: '{}': {}".format(type(e), peer, e))
-            sys.print_exception(e)
+                self._show_color(COLOR_RED)
+        else:
+            self._show_color(COLOR_RED)
+            self._log.warn('no surveyor available.')
+
+    # utility methods ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _handle_routing_failure(self, message):
         '''
@@ -408,116 +485,27 @@ class Relay(Component):
             message.event = FAILURE
             self.send_message(self._inbound_mac_bytes, INBOUND, message)
 
-    def _process_endpoint_logic(self, message):
+    def _print_configuration(self):
         '''
-        Executes operations on the last Node and returns it to the outbound handler.
-        This currently prepends "ack:" to the message value.
+        Prints the current network relay configuration to the console.
         '''
-        if self._verbose:
-            self._log.info('processing endpoint logic for message: '
-                    + Fore.GREEN + '{}'.format(message))
-        # prepend 'ack:' to string
-        response_value = "ack:{}".format(message.value)
-        message.value = response_value
-        self._log.info('endpoint message: ' + Fore.GREEN + '{}'.format(response_value))
-        return message
-
-    def _handle_outbound(self, message):
-        '''
-        Handles messages moving down the chain toward the endpoint (the last node in the sequence).
-
-        Depending on the routing strategy, messages are either intercepted by the local MessageBus,
-        which may or may not re-send back to the Relay. or sent to the MessageBus but immediately
-        passed on to the next node. 
-
-        Note with the latter that if the local node re-introduces the Message to the Relay it may
-        be a duplicate.
-        '''
-        if self._led_task:
-            self._led_task.cancel()
-        _direction = INBOUND if self._is_endpoint else OUTBOUND
-        _note = ''
-        _color = ''
-        if self._is_initiator:
-            _color = Fore.WHITE
-            _note = 'at initiator'
-            peer = self._outbound_mac_bytes
-        elif self._is_endpoint:
-            _color = Fore.GREEN
-            _note = 'at endpoint'
-            # if this is the endpoint we do any endpoint processing
-            message = self._process_endpoint_logic(message)
-            peer = self._inbound_mac_bytes
-        else:
-            _color = Fore.BLUE
-            _note = 'in transit'
-            peer = self._outbound_mac_bytes
-        if self._verbose:
-            self._log.info('handling outbound message {}{}:{} {}'.format(_color, _note, Fore.CYAN, message))
-
-        # under either strategy we publish to the MessageBus
-        self._message_bus.publish(message)
-
-        # after sending to the MessageBus...
-        if self._routing_strategy is FORWARD:
-            # immediately pass to the Relay
-            self.send_message(peer, _direction, message)
-            if self._is_initiator:
-                self._led_task = asyncio.create_task(self._flash_led(COLOR_AMBER, 500))
+        self._log.info('loaded configuration for ' + Fore.GREEN + '{} devices:'.format(self._total_devices))
+        for i, device in enumerate(self._device_list):
+            num = i + 1
+            id = device.get('id')
+            name = device.get('name')
+            mac_address = device.get('mac')
+            enabled = device.get('enabled')
+            if not enabled:
+                self._log.info(Style.DIM 
+                        + "[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
+            elif mac_address == self._local_mac_str.lower():
+                self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) + Style.BRIGHT
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
             else:
-                self._led_task = asyncio.create_task(self._flash_led(COLOR_TANGERINE, 3000))
-        elif self._routing_strategy is INTERCEPT:
-            # don't include the relay
-            self._led_task = asyncio.create_task(self._flash_led(COLOR_DEEP_FUCHSIA, 3000))
-        else:
-            # somehow we got here
-            self._log.error("mysterious error.")
-            self._led_task = asyncio.create_task(self._flash_led(COLOR_RED, 3000))
-
-    def _handle_inbound(self, message):
-        '''
-        Handles messages moving up the chain back toward the initiator (Node 1).
-
-        Messages in this reverse direction are never intercepted by the local MessageBus
-        as their intended purpose is acknowledgement to the initiator.
-        '''
-        if self._inbound_mac_bytes:
-            if self._verbose:
-                self._log.info('handling inbound message: {}'.format(message))
-            self._led_task = asyncio.create_task(self._flash_led(COLOR_APPLE, 500))
-            self.send_message(self._inbound_mac_bytes, INBOUND, message)
-        else:
-            if self._verbose:
-                self._log.info("initiator received ricochet response: {}".format(repr(message)))
-            if self._rx_callback:
-                self._rx_callback(message)
-            self._led_task = asyncio.create_task(self._flash_led(COLOR_EMERALD, 3000))
-
-    async def _run_loop(self):
-        '''
-        Asynchronous polling loop that processes incoming packets without blocking.
-        '''
-        while True:
-            # check for incoming ESP-NOW packets
-            host, encoded_message = self._espnow.recv()
-            if encoded_message is not None:
-#               self._log.debug("received message: '{}'".format(encoded_message))
-                try:
-                    decoded_msg = encoded_message.decode('utf-8')
-#                   self._log.debug("decoded message: '{}'".format(decoded_msg))
-                    direction, reconstructed_msg = self._message_codec.deserialize(decoded_msg)
-#                   self._log.debug("reconstructed message: '{}'".format(reconstructed_msg))
-                    if direction is OUTBOUND:
-                        self._handle_outbound(reconstructed_msg)
-                    elif direction is INBOUND:
-                        self._handle_inbound(reconstructed_msg)
-                except Exception as e:
-                    self._log.error('error in relay: {}'.format(e))
-                    sys.print_exception(e)
-            # yield control back to the asyncio scheduler
-            await asyncio.sleep_ms(5)
-
-    # utility methods ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
 
     @staticmethod
     def find_device_by_mac(device_list, mac_str):

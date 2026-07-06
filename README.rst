@@ -9,7 +9,6 @@ across the relay. Encrypted communication between nodes is supported.
 .. figure:: ./img/espnow-relay-arch-v1.png
    :width: 1200px
    :align: center
-   :height: 686px
    :alt: ESP-NOW Relay Architecture
 
    ESP-NOW Relay Architecture

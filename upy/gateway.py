@@ -35,6 +35,7 @@ class NetworkGateway(Publisher, Subscriber):
         self._verbose = True # _cfg['verbose']
         self._index = index
         self._relay = relay
+        self._relay.set_gateway(self)
         self._is_initiator = self._index == 0
         self.add_events(Event.all())
         self._inbound_mac_bytes   = self._relay.inbound_mac_bytes
@@ -59,6 +60,13 @@ class NetworkGateway(Publisher, Subscriber):
             self._log.warn('ignored: publisher not active.')
 
     # subscriber ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def receive_from_relay(self, message):
+        '''
+        Receives a message from the Relay, publishing to the MessageBus.
+        '''
+        self._log.info("😰 receiving message from relay: " + Fore.GREEN + "'{}'…".format(message.id))
+        self.publish(message)
 
     async def process_message(self, message):
         '''
@@ -86,11 +94,11 @@ class NetworkGateway(Publisher, Subscriber):
             if self._verbose:
                 self._log.debug("ignoring message: '{}' (no tnid)".format(message.id))
 
-    def acceptable(self, message):
-        '''
-        Returns True for any event type, since we want to filter all events.
-        '''
-        return True
+#   def acceptable(self, message):
+#       '''
+#       Returns True for any event type, since we want to filter all events.
+#       '''
+#       return True
 
     # relay ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

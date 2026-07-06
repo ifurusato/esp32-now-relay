@@ -8,8 +8,8 @@
    version="1.1"
    id="svg5"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
-   sodipodi:docname="ESP-NOW-Relay-Architecture.v1.svg"
-   inkscape:export-filename="/home/altheim/Desktop/espnow-relay-arch-v1.png"
+   sodipodi:docname="esp-now-relay-architecture-v1.svg"
+   inkscape:export-filename="/home/altheim/workspaces/workspace-esp32-now-relay/esp32-now-relay/img/espnow-relay-arch-v1.png"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -31,7 +31,7 @@
      fit-margin-right="0"
      fit-margin-bottom="0"
      inkscape:zoom="0.73889506"
-     inkscape:cx="587.36351"
+     inkscape:cx="587.36352"
      inkscape:cy="321.42589"
      inkscape:window-width="1920"
      inkscape:window-height="1043"
@@ -782,7 +782,7 @@
      style="display:inline"
      transform="translate(-0.24999949,-25.257835)">
     <rect
-       style="fill:#4c4c4c;fill-opacity:1;stroke:none;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1"
+       style="fill:#3f3f3f;fill-opacity:1;stroke:none;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1"
        id="rect13011"
        width="296.33334"
        height="169.33333"

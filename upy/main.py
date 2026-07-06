@@ -146,13 +146,7 @@ try:
     print_sysinfo()
 
     # create relay
-    _relay = Relay(
-        config=_config,
-        networking=_networking,
-        message_bus=_message_bus,
-        message_factory=_message_factory,
-        pixel=pixel
-    )
+    _relay = Relay(config=_config, networking=_networking, message_factory=_message_factory, pixel=pixel)
     # create surveyor
     log.info("creating surveyor…")
     _surveyor = Surveyor(_config, _relay.index, _networking, _message_bus, _message_factory)
