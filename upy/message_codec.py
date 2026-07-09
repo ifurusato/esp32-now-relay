@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-23
-# modified: 2026-06-27
+# modified: 2026-07-10
 
 import sys
 
@@ -20,7 +20,7 @@ class MessageCodec(Component):
     NAME = 'msg-codec'
     DELIMITER = '|'
     '''
-    Handles the serialization and deserialization of Message objects for network transport.
+    Handles the serialisation and deserialisation of Message objects for network transport.
     '''
     def __init__(self, message_factory=None, level=Level.INFO):
         Component.__init__(self, MessageCodec.NAME, suppressed=False, enabled=True, level=level)
@@ -28,9 +28,9 @@ class MessageCodec(Component):
         self._delimiter = MessageCodec.DELIMITER # could come from config
         self._log.info('ready.')
 
-    def serialize(self, direction, message):
+    def serialise(self, direction, message):
         '''
-        Serializes a Message instance and its network direction into a pipe-delimited payload string.
+        Serialises a Message instance and its network direction into a pipe-delimited payload string.
 
         :param direction: the network travel direction (int)
         :param message: the Message instance to encode
@@ -49,7 +49,7 @@ class MessageCodec(Component):
             message.timestamp
         )
 
-    def deserialize(self, payload_str):
+    def deserialise(self, payload_str):
         '''
         Parses a received pipe-delimited payload string back into its constituent direction
         and a fully reconstructed Message instance.
@@ -57,10 +57,13 @@ class MessageCodec(Component):
         :param payload_str: the raw un-encoded string received from the network
         :return: a tuple of (direction, reconstructed_message) or (None, None) if malformed
         '''
+        if len(payload_str) == 0:
+            self._log.error("empty payload string.")
+            return None, None
         # split exactly 5 times to safely isolate the 6 expected fields
         parts = payload_str.split(self._delimiter, 5)
         if len(parts) != 6:
-            self._log.error('payload string had {} parts rather than 6.'.format(len(parts)))
+            self._log.error("payload string had {} parts rather than 6: '{}'".format(len(parts), payload_str))
             return None, None
         try:
             direction   = Direction.from_id(int(parts[0]))
@@ -71,7 +74,7 @@ class MessageCodec(Component):
             timestamp   = int(parts[5])
             
             value_payload = raw_value if raw_value != "" else None
-            tnid_payload = raw_tnid if raw_tnid != "" else None
+            tnid_payload  = raw_tnid if raw_tnid != "" else None
             
             # reconstruct Message instance via factory context
             reconstructed_msg = self._message_factory.create_message(

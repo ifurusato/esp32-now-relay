@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-22
-# modified: 2026-07-07
+# modified: 2026-07-10
 #
 # ESP-NOW RELAY
 
@@ -167,7 +167,7 @@ class Relay(Component):
 
     def send_message(self, peer, direction, message):
         '''
-        Serializes an existing Message instance and transmits it over the network.
+        Serialises an existing Message instance and transmits it over the network.
         '''
         if not isinstance(peer, bytes):
             raise TypeError('was passed {} rather than bytes object.'.format(type(peer)))
@@ -175,7 +175,7 @@ class Relay(Component):
             raise TypeError('was passed {} rather than Direction object.'.format(type(direction)))
         if self._verbose:
             self._log.info('sending message {}: {}'.format(direction.name, message))
-        payload = self._message_codec.serialize(direction, message)
+        payload = self._message_codec.serialise(direction, message)
         ok = False
         try:
             encoded_payload = payload.encode('utf-8')
@@ -272,14 +272,19 @@ class Relay(Component):
             if encoded_message is not None:
 #               self._log.debug("received message: '{}'".format(encoded_message))
                 try:
+                    if encoded_message == b'\x00':
+                        continue
                     decoded_msg = encoded_message.decode('utf-8')
-#                   self._log.debug("decoded message: '{}'".format(decoded_msg))
-                    direction, reconstructed_msg = self._message_codec.deserialize(decoded_msg)
-#                   self._log.debug("reconstructed message: '{}'".format(reconstructed_msg))
-                    if direction is OUTBOUND:
-                        self._handle_outbound(reconstructed_msg)
-                    elif direction is INBOUND:
-                        self._handle_inbound(reconstructed_msg)
+#                   self._log.debug("decoded message: '{!r}' ({} chars)".format(decoded_msg, len(decoded_msg)))
+                    if len(decoded_msg) > 0:
+                        direction, reconstructed_msg = self._message_codec.deserialise(decoded_msg)
+#                       self._log.debug("reconstructed message: '{}'".format(reconstructed_msg))
+                        if direction is OUTBOUND:
+                            self._handle_outbound(reconstructed_msg)
+                        elif direction is INBOUND:
+                            self._handle_inbound(reconstructed_msg)
+                    else:
+                        self._log.warning("empty message.")
                 except Exception as e:
                     self._log.error('error in relay: {}'.format(e))
                     sys.print_exception(e)

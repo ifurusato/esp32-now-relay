@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-07-05
-# modified: 2026-07-07
+# modified: 2026-07-10
 #
 # ESP-NOW RELAY
 
@@ -18,7 +18,6 @@ from event import TOUCH
 from colors import *
 from subscriber import Subscriber
 from explorer_button import ExplorerButton
-from colorama import Fore
 
 class TouchSubscriber(Subscriber):
     NAME = 'touch'
@@ -43,7 +42,7 @@ class TouchSubscriber(Subscriber):
             ExplorerButton.by_name('DN'):    COLOR_AMBER,
             ExplorerButton.by_name('LT'):    COLOR_RED,
             ExplorerButton.by_name('RT'):    COLOR_YELLOW,
-            ExplorerButton.by_name('1'):     COLOR_APPLE,
+            ExplorerButton.by_name('1'):     COLOR_PEAR,
             ExplorerButton.by_name('2'):     COLOR_GREEN,
             ExplorerButton.by_name('3'):     COLOR_EMERALD,
             ExplorerButton.by_name('4'):     COLOR_ORANGE,
@@ -54,28 +53,25 @@ class TouchSubscriber(Subscriber):
         '''
         Decodes the message payload back into an ExplorerButton instance.
         '''
-#       self._log.debug('process message: ' + Fore.GREEN + '{}'.format(message))
+        self._log.info('process message: ' + Fore.GREEN + '{}'.format(message))
         button_name = message.value
         button = ExplorerButton.by_name(button_name)
         if button is not None:
-            await self._handle_button_press(button, message)
+            await self.handle_button_press(button, message)
         else:
             self._log.error('received unknown button name payload: {}'.format(button_name))
 
-    async def _handle_button_press(self, button, message):
+    async def handle_button_press(self, button, message):
         '''
         Action performed when a valid ExplorerButton is identified.
+
+        This method can be overridden by subclasses to perform actions
+        depending upon the button.
         '''
         color = self._button_colors.get(button)
         if color:
-            self._log.info('setting color {} for button: {}'.format(color.name, button))
             self._pixel.show_color(color)
         else:
             self._log.warn('no color for button: {}'.format(button))
-        self._log.info('rx: button={} ID={} (age={}ms)'.format(
-            Fore.GREEN + button.name + Fore.RESET,
-            button.id,
-            message.age_ms
-        ))
 
 #EOF
