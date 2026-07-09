@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2020-02-21
-# modified: 2026-06-22
+# modified: 2026-07-07
 
 class Event:
     '''
@@ -58,7 +58,7 @@ class Event:
     def by_name(cls, name):
         '''
         Looks up and returns an Event instance by its string name using the registry.
-        
+
         :param name: The string name of the event
         :return: The matching Event instance, or None if not registered
         '''
@@ -75,11 +75,13 @@ class Event:
 # event instances
 
 FAILURE       = Event(0, 'failure', priority=1.0)
-TOF_DISTANCES = Event(1, 'tof',     priority=0.5)
-SYSTEM        = Event(2, 'system',  priority=1.0)
-STARTUP       = Event(3, 'startup', priority=1.0)
-RELAY         = Event(4, 'relay',   priority=1.0)
-TOUCH         = Event(5, 'touch',   priority=1.0)
-SURVEY        = Event(6, 'survey',  priority=1.0)
+STARTUP       = Event(1, 'startup', priority=1.0)
+TOF_DISTANCES = Event(2, 'tof',     priority=0.5)
+SYSTEM        = Event(3, 'system',  priority=1.0)
+RTC           = Event(4, 'rtc',     priority=1.0)
+BUTTON        = Event(5, 'button',  priority=1.0)
+RELAY         = Event(6, 'relay',   priority=1.0)
+SURVEY        = Event(7, 'survey',  priority=1.0)
+TOUCH         = Event(8, 'touch',   priority=1.0)
 
 #EOF

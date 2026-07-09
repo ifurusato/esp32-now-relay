@@ -5,6 +5,9 @@ rros:
         verbose:           False
     initiator:
         pin:                   5       # connect pushbutton to IO5
+        enable_pixel:      False       # if True, use pixel to indicate status
+    rtc_subscriber:
+        verbose:           False
     surveyor:
         verbose:           False
     touch_publisher:
@@ -47,7 +50,7 @@ rros:
             - id:            "n4"
               name:          "Node 4 - FeatherS2"
               mac:           "7c:df:a1:03:4d:fe"
-              enabled:       True
+              enabled:       False
         
             - id:            "n5"
               name:          "Node 5 - Waveshare ESP32-S3 Zero"
@@ -63,6 +66,11 @@ rros:
             - id:            "n7"
               name:          "Node 7 - TinyS3 w antenna"
               mac:           "dc:54:75:eb:69:c8"
+              enabled:       True
+    
+            - id:            "n8"
+              name:          "Node 8 - Radiozoa WeAct ESP32-S3"
+              mac:           "10:20:ba:08:b7:84"
               enabled:       True
     
 #EOF

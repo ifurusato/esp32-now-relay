@@ -7,7 +7,11 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-07-05
-# modified: 2026-07-05
+# modified: 2026-07-07
+#
+# ESP-NOW RELAY
+
+from colorama import Fore, Style
 
 from logger import Level
 from event import TOUCH
@@ -21,9 +25,11 @@ class TouchSubscriber(Subscriber):
     '''
     A subscriber that receives TOUCH event messages and decodes their string value
     back into ExplorerButton pseudo-enum instances for further action.
+
+    This is meant to be installed on both the initiator and endpoint nodes.
     '''
-    def __init__(self, config, pixel, message_bus, level=Level.INFO):
-        Subscriber.__init__(self, TouchSubscriber.NAME, message_bus, level)
+    def __init__(self, config, message_bus, pixel, level=Level.INFO):
+        Subscriber.__init__(self, TouchSubscriber.NAME, suppressed=False, enabled=True, message_bus=message_bus, level=level)
         self._config = config
         self._pixel  = pixel
         self.add_event(TOUCH)
@@ -48,12 +54,13 @@ class TouchSubscriber(Subscriber):
         '''
         Decodes the message payload back into an ExplorerButton instance.
         '''
+#       self._log.debug('process message: ' + Fore.GREEN + '{}'.format(message))
         button_name = message.value
         button = ExplorerButton.by_name(button_name)
         if button is not None:
             await self._handle_button_press(button, message)
         else:
-            self._log.error('Received unknown button name payload: {}'.format(button_name))
+            self._log.error('received unknown button name payload: {}'.format(button_name))
 
     async def _handle_button_press(self, button, message):
         '''

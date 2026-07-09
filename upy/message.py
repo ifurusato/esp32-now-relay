@@ -7,9 +7,13 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-03-10
-# modified: 2026-06-28
+# modified: 2026-07-03
 
 import time
+from colorama import Fore, Style
+
+from event import Event
+from util import Util
 
 class Message:
     '''
@@ -18,6 +22,8 @@ class Message:
 
     If the 'tnid' (target node ID) value has been set, this indicates that the
     Message recipients are other nodes on the Relay.
+
+    There are no type restrictions on the value.
 
     Do not create directly: use the MessageFactory.
 
@@ -31,6 +37,8 @@ class Message:
         if event is None:
             raise ValueError('null event argument.')
         self._id        = id
+        if not isinstance(event, Event):
+            raise TypeError('expected an event, not {}'.format(type(event)))
         self._event     = event
         self._value     = value
         self._tnid      = None # target node ID
@@ -90,6 +98,15 @@ class Message:
     def age_ms(self):
         return time.ticks_diff(time.ticks_ms(), self._timestamp)
 
+    def copy(self):
+        '''
+        Returns a shallow copy of the Message instance, preserving all internal state.
+        '''
+        msg = Message(self._id, self._event, self._value)
+        msg._tnid = self._tnid
+        msg._timestamp = self._timestamp
+        return msg
+
     def __eq__(self, other):
         if not isinstance(other, Message):
             return False
@@ -101,12 +118,23 @@ class Message:
             and self._timestamp == other._timestamp
         )
 
+    @staticmethod
+    def _format_value(value, max_len=30):
+        '''
+        Convert non-string types (like tuples, lists, ints) to a safe string representation.
+        '''
+        if value is None:
+            return "None"
+        has_magenta = Fore.MAGENTA in value
+        val_str = str(value) if not isinstance(value, str) else value
+        return Util.ellipsis(val_str, max_len)
+
     def __repr__(self):
         return 'Message[\n  id={},{}\n  event={},\n  value={},\n  timestamp={}ms\n]'.format(
                 self._id,
-                '\n  tnid={}'.format(self._tnid) if self._tnid else '',
+                ('\n  tnid={}'.format(self._tnid) if self._tnid else ''),
                 self._event.name,
-                self.value,
+                Message._format_value(self._value, 50),
                 self.timestamp
             )
 

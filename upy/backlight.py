@@ -8,6 +8,8 @@
 # author:   Ichiro Furusato
 # created:  2026-07-05
 # modified: 2026-07-05
+#
+# sets the backlight of the UM Explorer shield on or off
 
 from machine import Pin
 

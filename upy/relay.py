@@ -7,7 +7,9 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-22
-# modified: 2026-07-06
+# modified: 2026-07-07
+#
+# ESP-NOW RELAY
 
 import sys
 import asyncio
@@ -21,7 +23,6 @@ from direction import *
 from logger import Logger, Level
 from component import Component
 from component_registry import ComponentRegistry
-from surveyor import Surveyor
 from config_error import ConfigurationError
 from message_codec import MessageCodec
 
@@ -40,20 +41,21 @@ class Relay(Component):
         self._pixel = pixel
         # load device list from configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = self._config['rros']['relay']
-        self._verbose = True # _cfg['verbose']
-        self._device_list = _cfg['devices']
-        self._enable_pixel = _cfg['enable_pixel']
+        self._verbose       = _cfg['verbose']
+        self._device_list   = _cfg['devices']
+        self._enable_pixel  = _cfg['enable_pixel'] and pixel is not None
         self._total_devices = len(self._device_list)
         self._local_mac_str = self._networking.mac_address
         self._log.info('device MAC address: ' + Fore.GREEN + '{}'.format(self._local_mac_str))
-        self._print_configuration()
         # find this device's position in catalog ┈┈┈┈┈┈┈┈┈┈┈
         self._index, local_device = Relay.find_device_by_mac(self._device_list, self._local_mac_str)
         if self._index is None:
-            self._show_color(COLOR_RED)
+            if self._enable_pixel:
+                self._show_color(COLOR_RED)
             raise ConfigurationError("local MAC address '{}' not found in topology catalog.".format(self._local_mac_str))
         else:
-            self._show_color(COLOR_DEEP_CYAN)
+            if self._enable_pixel:
+                self._show_color(COLOR_DEEP_CYAN)
             self._log.info('this device identified as: '
                     + Fore.GREEN + '{}'.format(self._device_list[self._index].get('name')))
         # set up ESP32-NOW ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -66,6 +68,8 @@ class Relay(Component):
             self._load_encryption_keys()
         else:
             self._log.info('using open transport.')
+        # display relay configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._print_configuration()
         # configure relay routing map ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._inbound_name        = None
         self._outbound_name       = None
@@ -154,8 +158,6 @@ class Relay(Component):
             self._log.info('enabling relay node…')
             super().enable()
             asyncio.create_task(self._run_loop())
-            if self._is_initiator:
-                self._survey_task = asyncio.create_task(self._survey())
             self._log.info(Fore.GREEN + 'relay ready.')
         else:
             self._log.warn('already enabled.')
@@ -172,14 +174,14 @@ class Relay(Component):
         if not isinstance(direction, Direction):
             raise TypeError('was passed {} rather than Direction object.'.format(type(direction)))
         if self._verbose:
-            self._log.info('sending message in {} direction: {}'.format(direction, message))
+            self._log.info('sending message {}: {}'.format(direction.name, message))
         payload = self._message_codec.serialize(direction, message)
         ok = False
         try:
             encoded_payload = payload.encode('utf-8')
             payload_len = len(encoded_payload)
             if self._verbose:
-                self._log.info('sending message in direction: {}.'.format(direction.name))
+                self._log.info('sending message {}.'.format(direction.name))
             ok = self._espnow.send(peer, encoded_payload)
             if ok:
                 self._log.debug('message was sent.')
@@ -197,28 +199,24 @@ class Relay(Component):
 
     def _process_endpoint_logic(self, message):
         '''
-        Executes operations on the last Node and returns it to the outbound handler.
-        This currently prepends "ack:" to the message value.
+        Executes any operations when on the endpoint Node and then returns the
+        message to the outbound handler.
         '''
+        if message.event == RTC:
+            # disable further relay passage of message
+            message.tnid == None
         if self._verbose:
-            self._log.info('processing endpoint logic for message: '
-                    + Fore.GREEN + '{}'.format(message))
-        # prepend 'ack:' to string
-        response_value = "ack:{}".format(message.value)
-        message.value = response_value
-        self._log.info('endpoint message: ' + Fore.GREEN + '{}'.format(response_value))
+            self._log.info('processed endpoint logic for message: ' + Fore.GREEN + '{}'.format(message))
         return message
 
     def _handle_outbound(self, message):
         '''
-        Handles messages moving down the chain toward the endpoint (the last node in the sequence).
+        Handles messages moving down the chain toward the endpoint (the last
+        node in the sequence).
 
-        Depending on the routing strategy, messages are either intercepted by the local MessageBus,
-        which may or may not re-send back to the Relay. or sent to the MessageBus but immediately
-        passed on to the next node. 
-
-        Note with the latter that if the local node re-introduces the Message to the Relay it may
-        be a duplicate.
+        If at the endpoint we create a clone of the Message to be passed to the
+        Gateway, which is passed to the local MessageBus before returning to
+        the Relay.
         '''
         if self._led_task:
             self._led_task.cancel()
@@ -228,23 +226,20 @@ class Relay(Component):
         if self._is_initiator:
             _color = Fore.WHITE
             _note = 'at initiator'
-            peer = self._outbound_mac_bytes
         elif self._is_endpoint:
             _color = Fore.GREEN
             _note = 'at endpoint'
-            # if this is the endpoint we do any endpoint processing
             message = self._process_endpoint_logic(message)
-            peer = self._inbound_mac_bytes
         else:
             _color = Fore.BLUE
             _note = 'in transit'
-            peer = self._outbound_mac_bytes
         if self._verbose:
-            self._log.info('handling outbound message {}{}:{} {}'.format(_color, _note, Fore.CYAN, message))
+            self._log.info('handling outbound message {}{}:{} {}'.format(_color, _note, Fore.GREEN, message))
 
         # we pass the message to the gateway
         self._gateway.receive_from_relay(message)
-        self._led_task = asyncio.create_task(self._flash_led(COLOR_DEEP_FUCHSIA, 3000))
+        if self._enable_pixel:
+            self._led_task = asyncio.create_task(self._flash_led(COLOR_DEEP_FUCHSIA, 3000))
 
     def _handle_inbound(self, message):
         '''
@@ -256,14 +251,16 @@ class Relay(Component):
         if self._inbound_mac_bytes:
             if self._verbose:
                 self._log.info('handling inbound message: {}'.format(message))
-            self._led_task = asyncio.create_task(self._flash_led(COLOR_APPLE, 500))
+            if self._enable_pixel:
+                self._led_task = asyncio.create_task(self._flash_led(COLOR_APPLE, 500))
             self.send_message(self._inbound_mac_bytes, INBOUND, message)
         else:
             if self._verbose:
                 self._log.info("initiator received ricochet response: {}".format(repr(message)))
             if self._rx_callback:
                 self._rx_callback(message)
-            self._led_task = asyncio.create_task(self._flash_led(COLOR_EMERALD, 3000))
+            if self._enable_pixel:
+                self._led_task = asyncio.create_task(self._flash_led(COLOR_EMERALD, 3000))
 
     async def _run_loop(self):
         '''
@@ -428,33 +425,6 @@ class Relay(Component):
         self._log.info("  └─ Downstream: {}{}".format(Fore.GREEN, self._outbound_name))
         return _enabled
 
-    # survey ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-    async def _survey(self, duration_ms=1000):
-        '''
-        Sends a message across the relay to survey each node's installed
-        ESP-NOW supported version to determine if it's possible to send
-        V2.0 messages of 1470 bytes rather than the 250 bytes of V1.0.
-        This also serves as a health status ping.
-        '''
-        self._show_color(COLOR_AMBER)
-        await asyncio.sleep_ms(50)
-        _registry = Component.get_registry()
-        _surveyor = _registry.get("sub:{}".format(Surveyor.NAME))
-        if _surveyor:
-            if self._is_endpoint:
-                _surveyor.set_is_endpoint()
-            _ok = _surveyor.send(self._show_color)
-            # give the survey some time to complete…
-            await asyncio.sleep_ms(duration_ms)
-            if _ok:
-                self._show_color(COLOR_TANGERINE)
-            else:
-                self._show_color(COLOR_RED)
-        else:
-            self._show_color(COLOR_RED)
-            self._log.warn('no surveyor available.')
-
     # utility methods ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _handle_routing_failure(self, message):
@@ -479,7 +449,8 @@ class Relay(Component):
             )
         if self._is_initiator:
             self._log.error('routing error: {}'.format(_value))
-            self._show_color(COLOR_RED)
+            if self._enable_pixel:
+                self._show_color(COLOR_RED)
         else:
             self._log.info('sending error message to initiator: ' + Fore.YELLOW + '{}'.format(_value))
             message.event = FAILURE
@@ -496,16 +467,55 @@ class Relay(Component):
             name = device.get('name')
             mac_address = device.get('mac')
             enabled = device.get('enabled')
+            in_range = '•' if self._is_peer_in_range(mac_address) else ''
             if not enabled:
                 self._log.info(Style.DIM 
                         + "[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address)
+                        + Fore.CYAN + Style.NORMAL + " {}".format(in_range))
             elif mac_address == self._local_mac_str.lower():
-                self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) + Style.BRIGHT
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
+                self._log.info("[{}]  id: ".format(num) 
+                        + Style.BRIGHT + "{:<4} ".format(id) 
+                        + Style.NORMAL + "name: "
+                        + Style.BRIGHT + "{:<34} ".format(name)
+                        + Style.NORMAL + "mac: " 
+                        + Fore.GREEN + Style.BRIGHT + "{} •".format(mac_address))
             else:
                 self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address))
+                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address)
+                        + Fore.CYAN + Style.BRIGHT + " {}".format(in_range))
+
+    def _is_peer_in_range(self, mac_str):
+        '''
+        Sends a synchronous ping to a MAC address string to verify if it
+        is within radio range. Returns True if acknowledged, False otherwise.
+        '''
+        if not self._encryption_enabled:
+            try:
+                mac_bytes = ubinascii.unhexlify(mac_str.replace(":", ""))
+                try:
+                    exists = any(peer[0] == mac_bytes for peer in self._espnow.get_peers())
+                    if not exists:
+                        self._espnow.add_peer(mac_bytes)
+                    try:
+                        # True parameter forces a synchronous send expecting an ACK
+                        connected = bool(self._espnow.send(mac_bytes, b"\x00", True))
+#                       self._log.debug('mac: {}; connected: {}'.format(mac_str, connected))
+                        return connected
+                    finally:
+                        if not exists:
+                            self._espnow.del_peer(mac_bytes)
+                except OSError as e:
+                    # ENODEV (error 19) indicates the peer did not ACK (out of range)
+                    if len(e.args) > 0 and e.args[0] != 19:
+                        self._log.error("ESP-NOW hardware error testing '{}': {}".format(mac_str, e))
+                except Exception as e:
+                    self._log.error("Unexpected error checking range for '{}': {}".format(mac_str, e))
+            except ValueError as e:
+                self._log.error("Invalid MAC address format '{}': {}".format(mac_str, e))
+            except Exception as e:
+                self._log.error("Unexpected error parsing MAC '{}': {}".format(mac_str, e))
+        return False
 
     @staticmethod
     def find_device_by_mac(device_list, mac_str):
@@ -527,11 +537,14 @@ class Relay(Component):
         '''
         Set the color of the pixel.
         '''
-        if self._pixel and self._enable_pixel:
+        if self._pixel:
             self._pixel.show_color(color)
 
     async def _flash_led(self, color, duration_ms=1000):
-#       self._log.debug('flash led: {}'.format(color.name))
+        '''
+        Asynchronously set the color of the pixel for a specified
+        period of time, then return to black.
+        '''
         self._show_color(color)
         await asyncio.sleep_ms(duration_ms)
         self._show_color(COLOR_BLACK)

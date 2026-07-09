@@ -8,6 +8,8 @@
 # author:   Ichiro Furusato
 # created:  2026-06-26
 # modified: 2026-06-28
+#
+# ESP-NOW RELAY
 
 import asyncio
 import sys
@@ -36,16 +38,16 @@ class Surveyor(Publisher, Subscriber):
     a second survey message is sent out with a payload of "survey:v2.0", to
     set each node's MessageFactory accordingly.
     '''
-    def __init__(self, config=None, index=-1, networking=None, message_bus=None, message_factory=None, level=Level.INFO):
+    def __init__(self, config=None, networking=None, message_bus=None, message_factory=None, relay=None, level=Level.INFO):
         Publisher.__init__(self, name=Surveyor.NAME, message_bus=message_bus, message_factory=message_factory, level=level, _init_base=False)
         Subscriber.__init__(self, name=Surveyor.NAME, message_bus=message_bus, enabled=True, level=level, _init_base=True)
         if config is None:
             raise TypeError('configuration argument is null.')
         _cfg = config['rros']['surveyor']
         self._verbose      = _cfg['verbose']
-        self._index        = index
-        self._is_initiator = index == 0
-        self._is_endpoint  = False
+        self._is_initiator = relay.is_initiator()
+        self._is_endpoint  = relay.is_endpoint()
+        self._index        = relay.index
         self._networking   = networking
         self._is_v2_compatible = None
         self.add_event(SURVEY)
@@ -100,8 +102,12 @@ class Surveyor(Publisher, Subscriber):
         return self.publish(_message)
 
     def _complete_survey(self, message):
-        self._log.info('🌸 _complete_survey.')
+        self._log.info('survey complete.')
         try:
+            if message.event == FAILURE:
+                self._log.error('survey failure.')
+                self._completed = True
+                return
             # returns the node survey or a boolean
             result = self._parse_survey(message.value)
             _is_v2_compatible = True
