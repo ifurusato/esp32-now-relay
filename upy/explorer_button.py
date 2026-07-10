@@ -7,7 +7,9 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-07-05
-# modified: 2026-07-05
+# modified: 2026-07-10
+
+from colors import *
 
 class ExplorerButton:
     '''
@@ -18,10 +20,11 @@ class ExplorerButton:
     _by_id = {}
     _by_mask = {}
 
-    def __init__(self, id, name, mask):
+    def __init__(self, id, name, color, mask):
         self._id = id
-        self._name = name
-        self._mask = mask
+        self._name  = name
+        self._color = color
+        self._mask  = mask
         ExplorerButton._registry.append(self)
         ExplorerButton._by_id[id] = self
         ExplorerButton._by_mask[mask] = self
@@ -33,6 +36,10 @@ class ExplorerButton:
     @property
     def name(self):
         return self._name
+
+    @property
+    def color(self):
+        return self._color
 
     @property
     def mask(self):
@@ -67,17 +74,17 @@ class ExplorerButton:
         return ExplorerButton._registry
 
 # ExplorerButton instances coupling names to hardware bitmasks
-BTN_3  = ExplorerButton( 0,  '3',    1)
-BTN_2  = ExplorerButton( 1,  '2',    2)
-BTN_1  = ExplorerButton( 2,  '1',    4)
-BTN_DN = ExplorerButton( 3, 'DN',    8)
-BTN_LT = ExplorerButton( 4, 'LT',   16)
-BTN_RT = ExplorerButton( 5, 'RT',   32)
-BTN_4  = ExplorerButton( 6,  '4',   64)
-BTN_UP = ExplorerButton( 7, 'UP',  128)
-BTN_B  = ExplorerButton( 8,  'B',  256)
-BTN_A  = ExplorerButton( 9,  'A',  512)
-BTN_Y  = ExplorerButton(10,  'Y', 1024)
-BTN_X  = ExplorerButton(11,  'X', 2048)
+BTN_3  = ExplorerButton( 0,  '3', COLOR_EMERALD,      1)
+BTN_2  = ExplorerButton( 1,  '2', COLOR_GREEN,        2)
+BTN_1  = ExplorerButton( 2,  '1', COLOR_PEAR,         4)
+BTN_DN = ExplorerButton( 3, 'DN', COLOR_AMBER,        8)
+BTN_LT = ExplorerButton( 4, 'LT', COLOR_RED,         16)
+BTN_RT = ExplorerButton( 5, 'RT', COLOR_YELLOW,      32)
+BTN_4  = ExplorerButton( 6,  '4', COLOR_ORANGE,      64)
+BTN_UP = ExplorerButton( 7, 'UP', COLOR_TANGERINE,  128)
+BTN_B  = ExplorerButton( 8,  'B', COLOR_VIOLET,     256)
+BTN_A  = ExplorerButton( 9,  'A', COLOR_BLUE,       512)
+BTN_Y  = ExplorerButton(10,  'Y', COLOR_SKY_BLUE,  1024)
+BTN_X  = ExplorerButton(11,  'X', COLOR_CYAN,      2048)
 
 #EOF

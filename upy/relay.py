@@ -69,7 +69,7 @@ class Relay(Component):
         else:
             self._log.info('using open transport.')
         # display relay configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._print_configuration()
+        _missing = self._print_configuration()
         # configure relay routing map ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._inbound_name        = None
         self._outbound_name       = None
@@ -88,7 +88,10 @@ class Relay(Component):
         else:
 #           self._log.debug('configured: index={}; inbound: {}; outbound: {}'.format(self._index, self._inbound_mac_bytes, self._outbound_mac_bytes ))
             pass
-        if not _enabled:
+        if _missing > 0:
+            self._log.error('cannot enable relay: {} missing node(s).'.format(_missing))
+            self.disable()
+        elif not _enabled:
             self.disable()
         if self.enabled:
             self._log.info('ready.')
@@ -464,8 +467,16 @@ class Relay(Component):
     def _print_configuration(self):
         '''
         Prints the current network relay configuration to the console.
+        This does have a diagnostic result, returning the count of missing
+        nodes, if any of the required (enabled) nodes are not in range and
+        therefore not available.
         '''
         self._log.info('loaded configuration for ' + Fore.GREEN + '{} devices:'.format(self._total_devices))
+        _missing = 0
+        inboard_peer, outboard_peer = self._get_active_peers(self._index)
+        inboard_id  = inboard_peer.get('id')  if inboard_peer  else "None"
+        outboard_id = outboard_peer.get('id') if outboard_peer else "None"
+
         for i, device in enumerate(self._device_list):
             num = i + 1
             id = device.get('id')
@@ -486,9 +497,45 @@ class Relay(Component):
                         + Style.NORMAL + "mac: " 
                         + Fore.GREEN + Style.BRIGHT + "{} •".format(mac_address))
             else:
-                self._log.info("[{}]  id: {:<4} name: {:<34} ".format(num, id, name) 
-                        + 'mac: ' + Fore.GREEN + '{}'.format(mac_address)
-                        + Fore.CYAN + Style.BRIGHT + " {}".format(in_range))
+                _color = Fore.GREEN if in_range else Fore.RED
+                if not in_range:
+                    _missing += 1
+                if inboard_id == id or outboard_id == id:
+                    self._log.info("[{}]  id: ".format(num) 
+                            + _color + "{:<4} ".format(id) 
+                            + Fore.CYAN + "name: "
+                            + _color + "{:<34} ".format(name)
+                            + Fore.CYAN + "mac: " 
+                            + _color + "{}".format(mac_address)
+                            + Fore.CYAN + " {}".format(in_range))
+                else:
+                    self._log.info("[{}]  id: ".format(num) 
+                            + _color + "{:<4} ".format(id) 
+                            + Fore.CYAN + "name: "
+                            + _color + "{:<34} ".format(name)
+                            + Fore.CYAN + "mac: " 
+                            + _color + "{}".format(mac_address)
+                            + Fore.CYAN + " {}".format(in_range))
+        return _missing
+
+    def _get_active_peers(self, current_index):
+        '''
+        Returns a tuple containing the nearest enabled inboard and outboard devices 
+        (or None if the end of the chain is reached).
+        '''
+        inboard_peer = None
+        outboard_peer = None
+        # traverse backward to find the first enabled inboard device
+        for i in range(current_index - 1, -1, -1):
+            if self._device_list[i].get('enabled'):
+                inboard_peer = self._device_list[i]
+                break
+        # traverse forward to find the first enabled outboard device
+        for i in range(current_index + 1, len(self._device_list)):
+            if self._device_list[i].get('enabled'):
+                outboard_peer = self._device_list[i]
+                break
+        return inboard_peer, outboard_peer
 
     def _is_peer_in_range(self, mac_str):
         '''

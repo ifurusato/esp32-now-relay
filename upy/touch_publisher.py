@@ -103,13 +103,15 @@ class TouchPublisher(Publisher):
                         # Calculate time elapsed since this specific button last successfully published
                         if time.ticks_diff(now, self._last_publish_time[btn]) >= self._debounce_delay_ms:
                             self._last_publish_time[btn] = now
-
                             message = self._message_factory.create_message(TOUCH, btn.name)
                             message.tnid = '*'
                             if self._active:
                                 self.publish(message)
                             if self._verbose:
-                                self._log.info(Fore.WHITE + 'published: {}'.format(message))
+                                self._log.info('published message ID: ' 
+                                        + Fore.GREEN + '{}'.format(message.id)
+                                        + Fore.CYAN + '; value: '
+                                        + Fore.GREEN + '{}'.format(message.value))
 
                 await asyncio.sleep_ms(self._poll_interval_ms)
             except asyncio.CancelledError:

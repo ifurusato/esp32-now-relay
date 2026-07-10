@@ -11,6 +11,7 @@
 #
 # ESP-NOW RELAY
 
+import asyncio
 from colorama import Fore, Style
 
 from logger import Level
@@ -29,24 +30,10 @@ class TouchSubscriber(Subscriber):
     '''
     def __init__(self, config, message_bus, pixel, level=Level.INFO):
         Subscriber.__init__(self, TouchSubscriber.NAME, suppressed=False, enabled=True, message_bus=message_bus, level=level)
-        self._config = config
-        self._pixel  = pixel
+        self._config   = config
+        self._pixel    = pixel
+        self._led_task = None
         self.add_event(TOUCH)
-        # map each ExplorerButton to its corresponding color
-        self._button_colors = {
-            ExplorerButton.by_name('A'):     COLOR_BLUE,
-            ExplorerButton.by_name('B'):     COLOR_VIOLET,
-            ExplorerButton.by_name('X'):     COLOR_CYAN,
-            ExplorerButton.by_name('Y'):     COLOR_SKY_BLUE,
-            ExplorerButton.by_name('UP'):    COLOR_TANGERINE,
-            ExplorerButton.by_name('DN'):    COLOR_AMBER,
-            ExplorerButton.by_name('LT'):    COLOR_RED,
-            ExplorerButton.by_name('RT'):    COLOR_YELLOW,
-            ExplorerButton.by_name('1'):     COLOR_PEAR,
-            ExplorerButton.by_name('2'):     COLOR_GREEN,
-            ExplorerButton.by_name('3'):     COLOR_EMERALD,
-            ExplorerButton.by_name('4'):     COLOR_ORANGE,
-        }
         self._log.info('ready.')
 
     async def process_message(self, message):
@@ -68,10 +55,30 @@ class TouchSubscriber(Subscriber):
         This method can be overridden by subclasses to perform actions
         depending upon the button.
         '''
-        color = self._button_colors.get(button)
-        if color:
+        if self._led_task is not None:
+            self._led_task.cancel()
+        self._led_task = asyncio.create_task(self._flash_led(button.color, 1000))
+
+    # utility ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def _show_color(self, color):
+        '''
+        Set the color of the pixel.
+        '''
+        if self._pixel:
             self._pixel.show_color(color)
-        else:
-            self._log.warn('no color for button: {}'.format(button))
+
+    async def _flash_led(self, color, duration_ms=1000):
+        '''
+        Asynchronously set the color of the pixel for a specified
+        period of time, then return to black.
+        '''
+        try:
+            self._show_color(color)
+            await asyncio.sleep_ms(duration_ms)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._show_color(COLOR_BLACK)
 
 #EOF
