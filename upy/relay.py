@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-22
-# modified: 2026-07-10
+# modified: 2026-07-12
 #
 # ESP-NOW RELAY
 
@@ -86,12 +86,10 @@ class Relay(Component):
         if self._is_initiator and self._outbound_mac_bytes is None:
             self._log.warn('initiator error: index={}; inbound: {}; outbound: {}'.format(self._index, self._inbound_mac_bytes, self._outbound_mac_bytes ))
         else:
-#           self._log.debug('configured: index={}; inbound: {}; outbound: {}'.format(self._index, self._inbound_mac_bytes, self._outbound_mac_bytes ))
-            pass
+            self._log.debug('configured: index={}; inbound: {}; outbound: {}'.format(self._index, self._inbound_mac_bytes, self._outbound_mac_bytes ))
         if _missing > 0:
-            self._log.error('cannot enable relay: {} missing node(s).'.format(_missing))
-            self.disable()
-        elif not _enabled:
+            self._log.warn('{} missing node(s) in relay.'.format(_missing))
+        if not _enabled:
             self.disable()
         if self.enabled:
             self._log.info('ready.')

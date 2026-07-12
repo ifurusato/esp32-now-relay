@@ -20,7 +20,7 @@ rros:
         encryption:        False       # enable encrypted transit, requires keys.yaml
         routing_strategy:  'intercept' # either 'forward' or 'intercept', latter posts to message bus
         enable_pixel:      False       # if True, use pixel to indicate status
-      
+
         # topology configuration for the ESP32-NOW relay chain
         # the order of this list strictly defines the relay path (Node 1 -> Node N)
         devices:
@@ -28,8 +28,8 @@ rros:
 #             name:          # the human-readable name of the node
 #             mac:           # the node's MAC address (in quotes)
 #             device:        # optional: only necessary when device type cannot be inferred from machine identifier
-#             enabled:       # if False do not include this device in the relay chaine
-    
+#             enabled:       # if False do not include this device in the relay chain
+
             - id:            "n1"
               name:          "Node 1 - TinyPICO Explorer"
               mac:           "24:a1:60:75:ba:84"

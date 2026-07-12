@@ -125,7 +125,7 @@ def load_pixel_implementation(config, device_type):
 
 try:
 
-    _config = ConfigLoader.configure('config.yaml')
+    _config = ConfigLoader.configure('relay.yaml')
 
     _message_bus     = MessageBus()
     _message_factory = MessageFactory(_message_bus)

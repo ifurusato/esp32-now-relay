@@ -21,7 +21,7 @@ class KeyGenerator:
     file based on a read-only source configuration.
     '''
     @staticmethod
-    def generate_keys(config_path='config.yaml', output_path='keys.yaml'):
+    def generate_keys(config_path='relay.yaml', output_path='keys.yaml'):
         log = Logger('key-gen', level=Level.INFO)
         try:
             log.info('loading configuration…')
