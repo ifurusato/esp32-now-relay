@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-07-06
-# modified: 2026-07-06
+# modified: 2026-07-13
 #
 # ESP-NOW RELAY
 
@@ -38,13 +38,32 @@ class RtcSubscriber(Subscriber):
         '''
         Decodes the message payload back into an ExplorerButton instance.
         '''
-        if self._verbose:
-            self._log.info('process message: ' + Fore.GREEN + '{}'.format(message))
-        datetime = tuple(int(x) for x in message.value.split(","))
-        self._rtc.datetime(datetime)
-        self._log.info('set RTC datetime to: ' + Fore.WHITE + Style.BRIGHT + '{}'.format(self.format_datetime(datetime)))
+        if self.enabled:
+            if self._verbose:
+                self._log.info('process message: ' + Fore.GREEN + '{}'.format(message))
+            datetime = tuple(int(x) for x in message.value.split(","))
+            self._rtc.datetime(datetime)
+            self._log.info('set RTC datetime to: ' + Fore.WHITE + Style.BRIGHT + '{}'.format(self.format_datetime(datetime)))
+        else:
+            self._log.warn('cannot process message: disabled.')
 
     def format_datetime(self, dt):
         return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}".format(dt[0], dt[1], dt[2], dt[4], dt[5], dt[6])
+
+    def disable(self):
+        if self.enabled:
+            super().disable()
+            self.clear_events()
+            self._rtc = None
+            self._log.debug('disabled.')
+        else:
+            self._log.warn('already disabled.')
+
+    def close(self):
+        if not self.closed:
+            super().close()
+            self._log.debug('closed.')
+        else:
+            self._log.warn('already closed.')
 
 #EOF

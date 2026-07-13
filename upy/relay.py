@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-22
-# modified: 2026-07-12
+# modified: 2026-07-13
 #
 # ESP-NOW RELAY
 
@@ -39,6 +39,7 @@ class Relay(Component):
         self._networking      = networking
         self._message_codec   = MessageCodec(message_factory, level)
         self._pixel = pixel
+        self._run_loop_task   = None
         # load device list from configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = self._config['rros']['relay']
         self._verbose       = _cfg['verbose']
@@ -158,7 +159,7 @@ class Relay(Component):
         elif not self.enabled:
             self._log.info('enabling relay node…')
             super().enable()
-            asyncio.create_task(self._run_loop())
+            self._run_loop_task = asyncio.create_task(self._run_loop())
             self._log.info(Fore.GREEN + 'relay ready.')
         else:
             self._log.warn('already enabled.')
@@ -618,5 +619,23 @@ class Relay(Component):
         Converts a bytes object into a standard hex string representation.
         '''
         return ubinascii.hexlify(lmk_bytes).decode('utf-8')
+
+    def disable(self):
+        if self.enabled:
+            super().disable()
+            if self._led_task:
+                self._led_task.cancel()
+            if self._run_loop_task:
+                self._run_loop_task.cancel()
+            self._log.debug('disabled.')
+        else:
+            self._log.warn('already disabled.')
+
+    def close(self):
+        if not self.closed:
+            super().close()
+            self._log.debug('closed.')
+        else:
+            self._log.warn('already closed.')
 
 #EOF

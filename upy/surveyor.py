@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-26
-# modified: 2026-06-28
+# modified: 2026-07-13
 #
 # ESP-NOW RELAY
 
@@ -37,6 +37,8 @@ class Surveyor(Publisher, Subscriber):
     results of each node's ESP-NOW version. If all nodes are ESP-NOW V2.0,
     a second survey message is sent out with a payload of "survey:v2.0", to
     set each node's MessageFactory accordingly.
+
+    Once the survey has been completed this class closes itself.
     '''
     def __init__(self, config=None, networking=None, message_bus=None, message_factory=None, relay=None, level=Level.INFO):
         Publisher.__init__(self, name=Surveyor.NAME, message_bus=message_bus, message_factory=message_factory, level=level, _init_base=False)
@@ -94,12 +96,16 @@ class Surveyor(Publisher, Subscriber):
         '''
         Initiates a survey message, publishing a new Message to the MessageBus.
         '''
-        self._log.info('initiating survey…')
-        _message = self._message_factory.create_message(SURVEY, Surveyor.SURVEY_PFX)
-        _message.tnid = '*'
-        if callback:
-            self._callback = callback
-        return self.publish(_message)
+        if self.enabled:
+            self._log.info('initiating survey…')
+            _message = self._message_factory.create_message(SURVEY, Surveyor.SURVEY_PFX)
+            _message.tnid = '*'
+            if callback:
+                self._callback = callback
+            return self.publish(_message)
+        else:
+            self._log.warn('not enabled.')
+            return None
 
     def _complete_survey(self, message):
         self._log.info('survey complete.')
@@ -141,15 +147,12 @@ class Surveyor(Publisher, Subscriber):
             if self._is_initiator:
                 if _is_v2_compatible:
                     self._log.info(Fore.MAGENTA + 'confirmed as V2.0 capable.')
-#                   _message = self._message_factory.create_message(SURVEY, Surveyor.V2_SIGNAL)
-#                   self._log.info(Fore.MAGENTA + 'sending V2.0 confirmation message ({}) to other nodes…'.format(_message.id))
-#                   _message.tnid = '*'
-#                   self._queue.append(_message)
-#                   self.publish(_message)
             elif self._is_endpoint:
                 _message.tnid = None
         finally:
             self._completed = True
+            self._log.info('survey complete: closing…')
+            self.close()
 
     def _parse_survey(self, value):
         '''
@@ -163,10 +166,10 @@ class Surveyor(Publisher, Subscriber):
         if not value.startswith("survey:"):
             return None
         if value == Surveyor.V1_SIGNAL:
-            self._log.info('🤢 _parse_survey: False')
+            self._log.debug('_parse_survey: False')
             return False
         elif value == Surveyor.V2_SIGNAL:
-            self._log.info('🤢 _parse_survey: True')
+            self._log.debug('_parse_survey: True')
             return True
         try:
             value = value[7:]
@@ -184,7 +187,10 @@ class Surveyor(Publisher, Subscriber):
         '''
         Publish a message to the bus if this publisher is active.
         '''
-        if self._completed:
+        if self.disabled:
+            self._log.warn("cannot publish: disabled.")
+            return False
+        elif self._completed:
             self._log.warn("cannot publish: survey already completed.")
             return False
         else:
@@ -195,27 +201,42 @@ class Surveyor(Publisher, Subscriber):
         Processes an incoming Message (as a Subscriber), then republishes the
         message after altering its message value.
         '''
-        if self._completed:
-            self._log.info('🤢 process_message: is already completed.')
+        if self.disabled:
+            self._log.warn("message ignored: disabled.")
+        elif self._completed:
             self._log.warn("message ignored: survey already completed.")
-            return
         elif message in self._queue:
             self._log.info(Fore.BLACK + "ignoring already-published message: '{}'".format(message.id))
-            return
-        if self._is_initiator and message.value.startswith("ack:"):
+        elif self._is_initiator and message.value.startswith("ack:"):
             self._log.info(Fore.BLACK + 'acknowledging inbound message: {}'.format(message.id))
             self._complete_survey(message)
-            return
-        if message.value == Surveyor.V2_SIGNAL:
-            self._log.info('🤢 process_message: received V2.0 signal.')
-            self._set_espnow_v2()
         else:
-            self._append_node_info(message)
-        self._queue.append(message) # add modified message to queue to avoid multiple publications
-        if self._verbose:
-            self._log.info("publishing message: "
-                    + Fore.GREEN + "'{}'".format(message.value)
-                    + Fore.CYAN + " with tnid '{}' to relay…".format(message.tnid))
-        self.publish(message)
+            if message.value == Surveyor.V2_SIGNAL:
+                self._log.debug('process_message: received V2.0 signal.')
+                self._set_espnow_v2()
+            else:
+                self._append_node_info(message)
+            self._queue.append(message) # add modified message to queue to avoid multiple publications
+            if self._verbose:
+                self._log.info("publishing message: "
+                        + Fore.GREEN + "'{}'".format(message.value)
+                        + Fore.CYAN + " with tnid '{}' to relay…".format(message.tnid))
+            self.publish(message)
+
+    def disable(self):
+        if self.enabled:
+            super().disable()
+            self.clear_events()
+            self._callback = None
+            self._log.debug('disabled.')
+        else:
+            self._log.warn('already disabled.')
+
+    def close(self):
+        if not self.closed:
+            super().close()
+            self._log.debug('closed.')
+        else:
+            self._log.warn('already closed.')
 
 #EOF

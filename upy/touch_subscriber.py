@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-07-05
-# modified: 2026-07-10
+# modified: 2026-07-13
 #
 # ESP-NOW RELAY
 
@@ -40,7 +40,11 @@ class TouchSubscriber(Subscriber):
         '''
         Decodes the message payload back into an ExplorerButton instance.
         '''
-        self._log.info('process message: ' + Fore.GREEN + '{}'.format(message))
+        self._log.info('process message: '
+                + Fore.GREEN + '{}'.format(message.id)
+                + Fore.CYAN + '; value; '
+                + Fore.GREEN + '{}'.format(message.value)
+            )
         button_name = message.value
         button = ExplorerButton.by_name(button_name)
         if button is not None:
@@ -58,6 +62,23 @@ class TouchSubscriber(Subscriber):
         if self._led_task is not None:
             self._led_task.cancel()
         self._led_task = asyncio.create_task(self._flash_led(button.color, 1000))
+
+    def disable(self):
+        if self.enabled:
+            super().disable()
+            if self._led_task:
+                self._led_task.cancel()
+            self.clear_events()
+            self._log.debug('disabled.')
+        else:
+            self._log.warn('already disabled.')
+
+    def close(self):
+        if not self.closed:
+            super().close()
+            self._log.debug('closed.')
+        else:
+            self._log.warn('already closed.')
 
     # utility ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
