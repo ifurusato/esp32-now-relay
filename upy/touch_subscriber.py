@@ -28,8 +28,13 @@ class TouchSubscriber(Subscriber):
 
     This is meant to be installed on both the initiator and endpoint nodes.
     '''
-    def __init__(self, config, message_bus, pixel, level=Level.INFO):
-        Subscriber.__init__(self, TouchSubscriber.NAME, suppressed=False, enabled=True, message_bus=message_bus, level=level)
+    def __init__(self, name=None, config=None, message_bus=None, pixel=None, level=Level.INFO):
+        Subscriber.__init__(self,
+                name        = TouchSubscriber.NAME if name is None else name,
+                message_bus = message_bus,
+                suppressed  = False,
+                enabled     = True,
+                level       = level)
         self._config   = config
         self._pixel    = pixel
         self._led_task = None

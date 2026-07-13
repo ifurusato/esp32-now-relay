@@ -147,11 +147,16 @@ class Surveyor(Publisher, Subscriber):
             if self._is_initiator:
                 if _is_v2_compatible:
                     self._log.info(Fore.MAGENTA + 'confirmed as V2.0 capable.')
+#                   _message = self._message_factory.create_message(SURVEY, Surveyor.V2_SIGNAL)
+#                   self._log.info(Fore.MAGENTA + 'sending V2.0 confirmation message ({}) to other nodes…'.format(_message.id))
+#                   _message.tnid = '*'
+#                   self._queue.append(_message)
+#                   self.publish(_message)
             elif self._is_endpoint:
                 _message.tnid = None
         finally:
             self._completed = True
-            self._log.info('survey complete: closing…')
+            self._log.info('😨 survey complete: closing…')
             self.close()
 
     def _parse_survey(self, value):
@@ -166,10 +171,10 @@ class Surveyor(Publisher, Subscriber):
         if not value.startswith("survey:"):
             return None
         if value == Surveyor.V1_SIGNAL:
-            self._log.debug('_parse_survey: False')
+            self._log.info('🤢 _parse_survey: False')
             return False
         elif value == Surveyor.V2_SIGNAL:
-            self._log.debug('_parse_survey: True')
+            self._log.info('🤢 _parse_survey: True')
             return True
         try:
             value = value[7:]
