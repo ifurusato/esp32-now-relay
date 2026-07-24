@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-03-10
-# modified: 2026-06-08
+# modified: 2026-07-13
 
 from component import Component
 from logger import Level
@@ -21,21 +21,19 @@ class Subscriber(Component):
     :param message_bus:  the message bus
     :param level:        the logging level
     '''
-    def __init__(self, name, message_bus, suppressed=False, enabled=False, _init_base=True, level=Level.INFO):
+    def __init__(self, name=None, message_bus=None, suppressed=False, enabled=False, _init_base=True, level=Level.INFO):
 #       super().__init__(name if ':' in name else 'sub:{}'.format(name), suppressed=suppressed, enabled=enabled, level=level)
         if _init_base:
             Component.__init__(
                 self,
-                name=name if ':' in name else 'sub:{}'.format(name),
-                suppressed=suppressed,
-                enabled=enabled,
-                level=level
+                name       = name if ':' in name else 'sub:{}'.format(name),
+                suppressed = suppressed,
+                enabled    = enabled,
+                level      = level
             )
         self._message_bus = message_bus
         self._events      = []
         message_bus.add_subscriber(self)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def message_bus(self):
@@ -47,6 +45,9 @@ class Subscriber(Component):
     def add_events(self, events):
         for _event in events:
             self._events.append(_event)
+
+    def clear_events(self):
+        self._events.clear()
 
     @property
     def events(self):

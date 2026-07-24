@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-07-05
-# modified: 2026-07-05
+# modified: 2026-07-21
 #
 # ESP-NOW RELAY
 
@@ -28,6 +28,8 @@ class TouchPublisher(Publisher):
     A publisher subclass that polls the MPR121 touch sensor on the
     Unexpected Maker TinyPICO Explorer Shield within an asyncio task
     and publishes touch events.
+
+    If not using the MPR121 we use the native ESP32 touch features.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         Publisher.__init__(self,
@@ -40,11 +42,15 @@ class TouchPublisher(Publisher):
         self._active     = _cfg['active']
         poll_interval_ms = _cfg['poll_interval_ms']
         self._debounce_delay_ms = _cfg.get('debounce_delay_ms', 333)
-        # I2C
-        scl_pin = 22
-        sda_pin = 21
-        self._i2c = I2C(1, scl=scl_pin, sda=sda_pin, freq=400000)
-        self._mpr = mpr121.MPR121(self._i2c)
+        self._use_mpr121 = _cfg['use_mpr121']
+        if self._use_mpr121:
+            # I2C
+            scl_pin          = _cfg['scl_pin']
+            sda_pin          = _cfg['sda_pin']
+            self._i2c = I2C(1, scl=scl_pin, sda=sda_pin, freq=400000)
+            self._mpr = mpr121.MPR121(self._i2c)
+        else:
+            self._mpr = None
         self._poll_interval_ms = poll_interval_ms
 
         # State tracking using the unified instances
@@ -84,11 +90,14 @@ class TouchPublisher(Publisher):
             self._log.warn('already disabled.')
 
     def _check_buttons(self):
-        k = self._mpr.touched()
-        btn = ExplorerButton.by_mask(k)
-        if btn is not None:
-            self._button_states[btn] = 1
-        return btn
+        if self._mpr:
+            k = self._mpr.touched()
+            btn = ExplorerButton.by_mask(k)
+            if btn is not None:
+                self._button_states[btn] = 1
+            return btn
+        else:
+            return None
 
     async def _run(self):
         '''

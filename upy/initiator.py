@@ -104,15 +104,13 @@ class Initiator(Publisher):
         inaccuracy between nodes).
         '''
         from machine import RTC as _RTC
+
         _rtc = _RTC()
         dt = _rtc.datetime()
         value = ",".join(str(x) for x in dt)
         message = self._message_factory.create_message(event=RTC, value=value)
-        self._log.info("RTC message: {}".format(message))
+        self._log.info("publishing RTC message…")
         self._publish_message(message)
-
-#       dt = tuple(int(x) for x in msg.split(","))
-#       rtc.datetime(dt)
 
     # survey ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

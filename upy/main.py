@@ -123,6 +123,9 @@ def load_pixel_implementation(config, device_type):
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+_USE_ROBOTPAD = True
+_USE_EXPLORER = False
+
 try:
 
     _config = ConfigLoader.configure('relay.yaml')
@@ -160,11 +163,24 @@ try:
         from initiator import Initiator
         _initiator = Initiator(_config, _message_bus, _message_factory, _pixel)
 
-        log.info("creating touch publisher…")
-        from touch_publisher import TouchPublisher
+        if _USE_ROBOTPAD:
+            log.info("creating touch pad publisher…")
+            from touch_pad_publisher import TouchPadPublisher
 
-        _touch_publisher = TouchPublisher(_config, _message_bus, _message_factory)
-        _touch_publisher.enable()
+            _touch_publisher = TouchPadPublisher(
+                    config=_config,
+                    message_bus=_message_bus,
+                    message_factory=_message_factory,
+                    pixel=_pixel)
+            _touch_publisher.enable()
+
+        if _USE_EXPLORER:
+            log.info("creating touch publisher…")
+            from touch_publisher import TouchPublisher
+
+            _touch_publisher = TouchPublisher(_config, _message_bus, _message_factory)
+            _touch_publisher.enable()
+
     elif _relay.is_endpoint():
         log.info("creating touch subscriber…")
         from touch_subscriber import TouchSubscriber
@@ -189,6 +205,7 @@ try:
     # keep the main thread alive or run the main loop hook
 #   asyncio.get_event_loop().run_forever()
     # keep the main thread alive using the MessageBus
+    log.info(Fore.WHITE + Style.BRIGHT + "starting message bus…")
     _message_bus.enable()
 
 except KeyboardInterrupt:

@@ -40,9 +40,8 @@ class MessageBus(Component):
         self._queue       = []
         self._subscribers = []
         self._enabled     = False
+        self._verbose     = False
         self._log.info('ready.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def add_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
@@ -60,7 +59,8 @@ class MessageBus(Component):
         '''
         Synchronously add a message to the FIFO queue.
         '''
-#       self._log.debug('publish message: ' + Fore.GREEN + '{}'.format(message))
+        if self._verbose:
+            self._log.info('publish message: ' + Fore.GREEN + '{}'.format(message))
         self._queue.append(message)
 
     def queue_size(self):
@@ -82,7 +82,8 @@ class MessageBus(Component):
         '''
         if not self.closed and not self.enabled:
             super().enable()
-#           self._log.debug('starting message bus loop…')
+            if self._verbose:
+                self._log.info('starting message bus loop…')
             try:
                 asyncio.run(self._start_consuming())
             except KeyboardInterrupt:
@@ -101,7 +102,8 @@ class MessageBus(Component):
         while self.enabled:
             if self._queue:
                 _message = self._queue.pop(0)
-#               self._log.debug('consuming message ID: {}; TNID: {}; for {} subscribers.'.format(_message.id, _message.tnid, len(self._subscribers)))
+                if self._verbose:
+                    self._log.info('consuming message ID: {}; TNID: {}; for {} subscribers.'.format(_message.id, _message.tnid, len(self._subscribers)))
                 for _subscriber in self._subscribers:
 #                   self._log.debug('subscriber: {}; active? {}'.format(_subscriber, _subscriber.is_active))
                     if _subscriber.is_active and _subscriber.acceptable(_message):
