@@ -7,52 +7,37 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-06-21
-# modified: 2026-07-07
+# modified: 2026-07-27
 
-import asyncio
-import sys, os, gc
-import time
+import sys
 
-from colorama import Fore, Style
-from colors import *
-from event import *
-from logger import Logger, Level
-from config_loader import ConfigLoader
-from message_bus import MessageBus
-from message_factory import MessageFactory
-
-from networking import Networking
-from gateway import NetworkGateway
-from surveyor import Surveyor
-from relay import Relay
-
-# force module reload
-for mod in ['main']:
+# force module reload for local modules
+for mod in [ 'main', 'touch_pad_app', 'relay' ]:
     if mod in sys.modules:
         del sys.modules[mod]
 
+import os
+import gc
+import time
+from colorama import Fore, Style
+
+from colors import *
+from logger import Logger, Level
+from config_loader import ConfigLoader
+from networking import Networking
+from relay import Relay
+from touch_pad_app import TouchPadApp
+
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-IS_TINYS3 = True # otherwise TinyPICO
-START_COUNT = 1
+START_COUNT = 3
 
-_pixel = None
 log = Logger('main', Level.INFO)
-
-# methods ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 def detect_device_type():
     '''
     Identifies the specific device using firmware machine metadata.
-
-    sys.implementation._machine returns strings like:
-
-       'TinyPICO with ESP32'
-       'FeatherS2 with ESP32S2'
-       'TinyS3 with ESP32S3' or 'UM TinyS3 with ESP32S3'
-
     '''
-    # safely convert to lowercase to handle any variations in firmware versions
     machine_info = sys.implementation._machine.lower()
     if "tinypico" in machine_info:
         return "tinypico"
@@ -61,160 +46,94 @@ def detect_device_type():
     elif "tinys3" in machine_info:
         return "tinys3"
     elif "generic esp32s3" in machine_info:
-        return None # likely "zero"
+        return None
     else:
-        # fallback to checking the underlying chip generation if the device manufacturer altered the string
-        _log.info("unknown device (platform info: {})".format(sys.implementation._machine))
+        log.info("unknown device (platform info: {})".format(sys.implementation._machine))
         return None
 
-def pre_blink():
+def load_pixel_implementation(config, device_type):
     '''
-    Blinks the LED three times, giving you enough time to interrupt booting the OS.
+    Loads the supporting pixel class for the given device type.
+    '''
+    if device_type == "tinypico":
+        from pico_pixel import PicoPixel
+        log.info('device identified as: ' + Fore.GREEN + 'UM TinyPICO')
+        return PicoPixel()
+    elif device_type == "tinys3":
+        from s3_pixel import S3Pixel
+        log.info('device identified as: ' + Fore.GREEN + 'UM TinyS3')
+        return S3Pixel()
+    elif device_type == "feathers2":
+        from feather_pixel import FeatherPixel
+        log.info('device identified as: ' + Fore.GREEN + 'UM FeatherS2')
+        return FeatherPixel()
+    elif device_type == "zero":
+        from zero_pixel import ZeroPixel
+        log.info('device identified as: ' + Fore.GREEN + 'Waveshare ESP32-S3 Zero')
+        return ZeroPixel()
+    elif device_type == "super-mini":
+        from super_mini_pixel import SuperMiniPixel
+        log.info('device identified as: ' + Fore.GREEN + 'ESP32-S3 Super Mini')
+        return SuperMiniPixel()
+    return None
+
+def pre_blink(pixel):
+    '''
+    Blinks the LED, giving enough time to interrupt booting the OS.
     '''
     for i in range(START_COUNT):
         log.info('[{}/{}] starting…'.format(i + 1, START_COUNT))
-        _pixel.show_color(COLOR_DARK_CYAN)
+        pixel.show_color(COLOR_DARK_CYAN)
         time.sleep_ms(50)
-        _pixel.show_color(COLOR_BLACK)
+        pixel.show_color(COLOR_BLACK)
         time.sleep_ms(950)
 
 def print_sysinfo():
     gc.collect()
     s = os.statvfs('/')
     log.info('RAM free: {:.1f}KB; used: {:.1f}KB; FS used/total: {:.1f}KB/{:.1f}KB; free: {:.1f}KB'.format(
-        gc.mem_free()  / 1024,                   # ram free
-        gc.mem_alloc() / 1024,                   # ram used
-        ((s[2] * s[1]) - (s[4] * s[1])) / 1024,  # fs used
-        (s[2] * s[1]) / 1024,                    # fs total
-        (s[4] * s[1]) / 1024                     # fs free
+        gc.mem_free() / 1024,
+        gc.mem_alloc() / 1024,
+        ((s[2] * s[1]) - (s[4] * s[1])) / 1024,
+        (s[2] * s[1]) / 1024,
+        (s[4] * s[1]) / 1024
     ))
 
-def load_pixel_implementation(config, device_type):
-    '''
-    Loads the supporting pixel class for the given device type.
-    This is done right at the beginning so we have a pixel to work with.
-    '''
-    global _pixel
-    if device_type == "tinypico":
-        # TinyPICO uses APA102 (DotStar) RGB LED on pins 2, 3
-        from pico_pixel import PicoPixel
-        _pixel = PicoPixel()
-        log.info('device identified as: ' + Fore.GREEN + 'UM TinyPICO')
-        return True
-    elif device_type == "tinys3":
-        # TinyS3 uses a WS2812B (NeoPixel) on pin 18 and has user controlled RF switch
-        from s3_pixel import S3Pixel
-        _pixel = S3Pixel()
-        log.info('device identified as: ' + Fore.GREEN + 'UM TinyS3')
-        return True
-    elif device_type == "feathers2":
-        from feather_pixel import FeatherPixel
-        _pixel = FeatherPixel()
-        # FeatherS2 uses an APA102 on pins 40, 39 and has unique LDO control
-        log.info('device identified as: ' + Fore.GREEN + 'UM FeatherS2')
-        return True
-    elif device_type == "zero":
-        from zero_pixel import ZeroPixel
-        _pixel = ZeroPixel()
-        # we make a dangerous assumption that this is a Waveshare ESP32-S3 Zero
-        log.info('device identified as: ' + Fore.GREEN + 'Waveshare ESP32-S3 Zero')
-        return True
-    return False
+def run():
+    pixel = None
+    try:
+        config = ConfigLoader.configure('relay.yaml')
+        networking = Networking()
+        mac_address = networking.mac_address
+        device_type = detect_device_type()
+        log.info('detected device: {}{}{}'.format(Fore.GREEN, device_type, Fore.CYAN))
 
-# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        pixel = load_pixel_implementation(config, device_type)
+        if not pixel:
+            device_catalog = config['rros']['relay']['devices']
+            node_index, node_profile = Relay.find_device_by_mac(device_catalog, mac_address)
+            device_type = node_profile['device']
+            pixel = load_pixel_implementation(config, device_type)
+            log.info('device identifier: {}{}{} (via MAC address)'.format(Fore.GREEN, device_type, Fore.CYAN))
 
-_USE_ROBOTPAD = True
-_USE_EXPLORER = False
+        if not pixel:
+            log.warn('no pixel identified for device type: {}'.format(device_type))
 
-try:
+        if pixel:
+            pre_blink(pixel)
 
-    _config = ConfigLoader.configure('relay.yaml')
+        print_sysinfo()
 
-    _message_bus     = MessageBus()
-    _message_factory = MessageFactory(_message_bus)
-    _networking      = Networking()
-    mac_address      = _networking.mac_address
-    device_type      = detect_device_type()
+        app = TouchPadApp(config=config, networking=networking, pixel=pixel)
+        app.enable()
 
-    loaded_pixel = load_pixel_implementation(_config, device_type)
-    if not loaded_pixel:
-        # try again with MAC address and config 
-        device_catalog = _config['rros']['relay']['devices']
-        node_index, node_profile = Relay.find_device_by_mac(device_catalog, mac_address)
-        device_type = node_profile['device']
-        loaded_pixel = load_pixel_implementation(_config, device_type)
-        log.info('device identifier: {}{}{} (via MAC address)'.format(Fore.GREEN, device_type, Fore.CYAN))
+    except KeyboardInterrupt:
+        log.info('interrupted in main.')
+    except Exception as e:
+        log.error('{} raised: {}'.format(type(e), e))
+        sys.print_exception(e)
 
-    if _pixel:
-        pre_blink()
-    print_sysinfo()
-
-    # create relay
-    _relay = Relay(config=_config, networking=_networking, message_factory=_message_factory, pixel=_pixel)
-    # create surveyor
-    log.info("creating surveyor…")
-    _surveyor = Surveyor(_config, _networking, _message_bus, _message_factory, _relay)
-    # create gateway
-    _gateway = NetworkGateway(_config, _message_bus, _message_factory, _relay)
-
-    _initiator = None
-    if _relay.is_initiator():
-        log.info("establishing initiator…")
-        from initiator import Initiator
-        _initiator = Initiator(_config, _message_bus, _message_factory, _pixel)
-
-        if _USE_ROBOTPAD:
-            log.info("creating touch pad publisher…")
-            from touch_pad_publisher import TouchPadPublisher
-
-            _touch_publisher = TouchPadPublisher(
-                    config=_config,
-                    message_bus=_message_bus,
-                    message_factory=_message_factory,
-                    pixel=_pixel)
-            _touch_publisher.enable()
-
-        if _USE_EXPLORER:
-            log.info("creating touch publisher…")
-            from touch_publisher import TouchPublisher
-
-            _touch_publisher = TouchPublisher(_config, _message_bus, _message_factory)
-            _touch_publisher.enable()
-
-    elif _relay.is_endpoint():
-        log.info("creating touch subscriber…")
-        from touch_subscriber import TouchSubscriber
-
-        _touch_subscriber = TouchSubscriber(_config, _message_bus, _pixel)
-        _touch_subscriber.enable()
-
-    if not _relay.is_initiator():
-        from rtc_subscriber import RtcSubscriber
-
-        _rtc_subscriber = RtcSubscriber(_config, _message_bus)
-
-    # execution processing via asyncio
-    log.info("scheduling relay task and starting event loop…")
-    _relay.enable()
-#   log.info("relay enabled.")
-    if _initiator:
-        _initiator.enable()
-#       log.info("initiator enabled.")
-
-#   asyncio.create_task(_relay.run_loop())
-    # keep the main thread alive or run the main loop hook
-#   asyncio.get_event_loop().run_forever()
-    # keep the main thread alive using the MessageBus
-    log.info(Fore.WHITE + Style.BRIGHT + "starting message bus…")
-    _message_bus.enable()
-
-except KeyboardInterrupt:
-    log.info('interrupted.')
-except Exception as e:
-    log.error('{} raised: {}'.format(type(e), e))
-    sys.print_exception(e)
-finally:
-    if _pixel:
-        _pixel.close()
+if __name__ in ('__main__', 'main'):
+    run()
 
 #EOF

@@ -7,9 +7,8 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-06-29
-# modified: 2026-06-18  ported to MicroPython
+# modified: 2026-07-27
 
-import _thread
 from collections import OrderedDict
 from colorama import Fore, Style
 
@@ -23,7 +22,6 @@ class ComponentRegistry:
     def __init__(self, level=Level.INFO):
         self._log = Logger("comp-registry", level)
         self._verbose = False
-        self._registry_lock = _thread.allocate_lock()
         self._dict = OrderedDict()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -58,7 +56,6 @@ class ComponentRegistry:
         Return True if the dictionary is empty.
         '''
         return len(self._dict) == 0
-
 
     @staticmethod
     def is_publisher(component):
@@ -103,13 +100,19 @@ class ComponentRegistry:
         else:
             self._dict[component.name] = component
             if self._verbose:
-                self._log.info(Style.DIM + 'added \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
+                self._log.info(Style.DIM + 'added component \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
 
     def has(self, name):
         '''
         Returns True if the name is found in the registry.
         '''
         return name in self._dict
+
+    def clear(self):
+        '''
+        Clear the registry dict.
+        '''
+        self._dict.clear()
 
     def remove(self, name):
         '''
@@ -128,6 +131,7 @@ class ComponentRegistry:
     def deregister(self, component):
         for name, obj in list(self._dict.items()):
             if obj is component:
+                self._log.debug("removing '{}' from registry…".format(name))
                 del self._dict[name]
                 return True
         return False
@@ -142,31 +146,26 @@ class ComponentRegistry:
         '''
         Print the registry to the log.
         '''
-        self._registry_lock.acquire()
-        try:
-            self._log.info('component list:')
+        self._log.info('component list:')
+        self._log.info(
+            Style.DIM +
+            '{:<20}{:<28}{:<10}{:<10}'.format(
+                'id', 'class', 'enabled', 'released'
+            )
+        )
+        for _name, _component in self._dict.items():
             self._log.info(
-                Style.DIM +
-                '{:<20}{:<28}{:<10}{:<10}'.format(
-                    'id', 'class', 'enabled', 'released'
+                '{:<20}{}{:<28}{}{}{:<10}{}{:<10}'.format(
+                    _name,
+                    Fore.YELLOW,
+                    _component.classname,
+                    Fore.CYAN,
+                    Style.NORMAL if _component.enabled else Style.DIM,
+                    str(_component.enabled),
+                    Style.NORMAL if _component.released else Style.DIM,
+                    str(_component.released)
                 )
             )
-            for _name, _component in self._dict.items():
-                self._log.info(
-                    '{:<20}{}{:<28}{}{}{:<10}{}{:<10}'.format(
-                        _name,
-                        Fore.YELLOW,
-                        _component.classname,
-                        Fore.CYAN,
-                        Style.NORMAL if _component.enabled else Style.DIM,
-                        str(_component.enabled),
-                        Style.NORMAL if _component.released else Style.DIM,
-                        str(_component.released)
-                    )
-                )
-
-        finally:
-            self._registry_lock.release()
 
     def count_open_components(self):
         '''

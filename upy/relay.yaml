@@ -3,6 +3,8 @@
 # ESP-NOW RELAY
 
 rros:
+    touch_pad_app:
+        use_explorer:      False       # if True, use UM Explorer shield rather than TouchPad
     gateway:
         verbose:           False
     initiator:
@@ -44,37 +46,42 @@ rros:
 #             enabled:       # if False do not include this device in the relay chain
 
             - id:            "n1"
-              name:          "Node 1 - TinyPICO Explorer"
+              name:          "Node 1 - ESP32-S3 Super Mini"
+              mac:           "e0:72:a1:e8:b9:54"
+              device:        "super-mini"
+              enabled:       True
+            - id:            "n2"
+              name:          "Node 2 - TinyPICO Explorer"
               mac:           "24:a1:60:75:ba:84"
               enabled:       False
-            - id:            "n2"
-              name:          "Node 2 - TinyPICO green"
+            - id:            "n3"
+              name:          "Node 3 - TinyPICO green"
               mac:           "64:b7:08:90:5c:c4"
               enabled:       False
-            - id:            "n3"
-              name:          "Node 3 - Waveshare ESP32-S3 Zero"
+            - id:            "n4"
+              name:          "Node 4 - Waveshare ESP32-S3 Zero"
               mac:           "50:78:7d:17:fe:d8"
               device:        "zero"
               enabled:       False
-            - id:            "n4"
-              name:          "Node 4 - FeatherS2"
+            - id:            "n5"
+              name:          "Node 5 - FeatherS2"
               mac:           "7c:df:a1:03:4d:fe"
               enabled:       False
-            - id:            "n5"
-              name:          "Node 5 - Waveshare ESP32-S3 Zero"
+            - id:            "n6"
+              name:          "Node 6 - Waveshare ESP32-S3 Zero"
               mac:           "24:ec:4a:26:8f:5c"
               device:        "zero"
-              enabled:       True
-            - id:            "n6"
-              name:          "Node 6 - TinyPICO red"
-              mac:           "98:cd:ac:d3:41:b8"
               enabled:       False
             - id:            "n7"
-              name:          "Node 7 - TinyS3 w antenna"
-              mac:           "dc:54:75:eb:69:c8"
+              name:          "Node 7 - TinyPICO red"
+              mac:           "98:cd:ac:d3:41:b8"
               enabled:       False
             - id:            "n8"
-              name:          "Node 8 - Radiozoa WeAct ESP32-S3"
+              name:          "Node 8 - TinyS3 w antenna"
+              mac:           "dc:54:75:eb:69:c8"
+              enabled:       False
+            - id:            "n9"
+              name:          "Node 0 - Radiozoa WeAct ESP32-S3"
               mac:           "10:20:ba:08:b7:84"
               enabled:       True
 

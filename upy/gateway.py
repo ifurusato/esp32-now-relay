@@ -30,7 +30,7 @@ class NetworkGateway(Publisher, Subscriber):
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, relay=None, level=Level.INFO):
         Publisher.__init__(self, name=NetworkGateway.NAME, message_bus=message_bus, message_factory=message_factory, level=level, _init_base=False)
-        Subscriber.__init__(self, name=NetworkGateway.NAME, message_bus=message_bus, enabled=True, level=level, _init_base=True)
+        Subscriber.__init__(self, name=NetworkGateway.NAME, message_bus=message_bus, enabled=False, level=level, _init_base=True)
         if config is None:
             raise TypeError('configuration argument is null.')
         _cfg = config['rros']['gateway']

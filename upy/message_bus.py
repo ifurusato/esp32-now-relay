@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2020-11-10
-# modified: 2026-07-07
+# modified: 2026-07-18
 
 import asyncio
 from colorama import Fore, Style
@@ -39,9 +39,18 @@ class MessageBus(Component):
         Component.__init__(self, MessageBus.NAME, suppressed=False, enabled=False)
         self._queue       = []
         self._subscribers = []
+        self._callback    = None
         self._enabled     = False
-        self._verbose     = False
-        self._log.info('ready.')
+        self._log.info('ready. ' + Fore.BLACK + '(uuid: {})'.format(self.uuid))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def add_callback(self, callback):
+        '''
+        Add a single use callback that is executed when the message bus
+        first starts.
+        '''
+        self._callback = callback
 
     def add_subscriber(self, subscriber):
         self._subscribers.append(subscriber)
@@ -59,8 +68,7 @@ class MessageBus(Component):
         '''
         Synchronously add a message to the FIFO queue.
         '''
-        if self._verbose:
-            self._log.info('publish message: ' + Fore.GREEN + '{}'.format(message))
+#       self._log.debug('publish message: ' + Fore.GREEN + '{}'.format(message))
         self._queue.append(message)
 
     def queue_size(self):
@@ -82,8 +90,7 @@ class MessageBus(Component):
         '''
         if not self.closed and not self.enabled:
             super().enable()
-            if self._verbose:
-                self._log.info('starting message bus loop…')
+#           self._log.debug('starting message bus loop…')
             try:
                 asyncio.run(self._start_consuming())
             except KeyboardInterrupt:
@@ -100,10 +107,13 @@ class MessageBus(Component):
         '''
         self._log.info(Fore.GREEN + 'message bus loop started.')
         while self.enabled:
+            if self._callback is not None:
+                self._log.info('executing startup callback…')
+                self._callback() 
+                self._callback = None
             if self._queue:
                 _message = self._queue.pop(0)
-                if self._verbose:
-                    self._log.info('consuming message ID: {}; TNID: {}; for {} subscribers.'.format(_message.id, _message.tnid, len(self._subscribers)))
+#               self._log.debug('consuming message ID: {}; TNID: {}; for {} subscribers.'.format(_message.id, _message.tnid, len(self._subscribers)))
                 for _subscriber in self._subscribers:
 #                   self._log.debug('subscriber: {}; active? {}'.format(_subscriber, _subscriber.is_active))
                     if _subscriber.is_active and _subscriber.acceptable(_message):
@@ -121,10 +131,13 @@ class MessageBus(Component):
         else:
             self._log.info('disabling…')
             self.clear_queue()
+            self._subscribers.clear()
+            self._callback = None
             super().disable()
 
     def close(self):
         self._closed = True
         self.disable()
+        MessageBus._instance = None
 
 #EOF
