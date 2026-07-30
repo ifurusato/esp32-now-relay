@@ -352,15 +352,18 @@ class Relay(Component):
                         Fore.GREEN, this_mac_str, Fore.CYAN, Fore.GREEN, mac_str, Fore.CYAN))
                 self._log.info('adding encrypted {:>10} peer        mac: '.format(direction.name) + Fore.GREEN + '{}'.format(mac_str))
                 self._add_peer(mac_bytes, mac_str, bytes.fromhex(lmk_hex), encrypt=True) 
-                mac_bytes, lmk_bytes, channel, ifidx, encrypt = self._espnow.get_peer(mac_bytes)
-                mac = self.bytes_to_mac(mac_bytes)
-                lmk = self.bytes_to_lmk(lmk_bytes)
-#               self._log.debug('info: ' + Fore.BLUE + "mac: '{}'; lmk: '{}'; channel: {}; ifidx: {}; encrypt: {}".format(mac, lmk, channel, ifidx, encrypt))
             else:
                 self._log.warn("no LMK found for link key {}; registering unencrypted.".format(link_mac_str))
                 self._add_peer(mac_bytes, mac_str)
+                return
         else:   
             self._add_peer(mac_bytes, mac_str)
+        # print peer info
+        mac_bytes, lmk_bytes, channel, ifidx, encrypt = self._espnow.get_peer(mac_bytes)
+        mac = self.bytes_to_mac(mac_bytes)
+#       lmk = self.bytes_to_lmk(lmk_bytes)
+        self._log.info('peer info: ' + Fore.BLUE + "MAC: '{}'; channel: {}; ifidx: {}; encrypt: {}".format(
+                mac, channel, ifidx, encrypt))
 
     def _add_peer(self, mac_bytes, mac_str, lmk=None, encrypt=False):
         '''

@@ -156,7 +156,7 @@ class Surveyor(Publisher, Subscriber):
                 _message.tnid = None
         finally:
             self._completed = True
-            self._log.info('😨 survey complete: closing…')
+            self._log.info('survey complete: closing…')
             self.close()
 
     def _parse_survey(self, value):
@@ -171,10 +171,10 @@ class Surveyor(Publisher, Subscriber):
         if not value.startswith("survey:"):
             return None
         if value == Surveyor.V1_SIGNAL:
-            self._log.info('🤢 _parse_survey: False')
+            self._log.debug('parse survey: False')
             return False
         elif value == Surveyor.V2_SIGNAL:
-            self._log.info('🤢 _parse_survey: True')
+            self._log.debug('parse survey: True')
             return True
         try:
             value = value[7:]
