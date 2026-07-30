@@ -29,6 +29,7 @@ class Networking:
         # establish network ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._wlan = network.WLAN(network.STA_IF)
         self._wlan.active(True)
+        self._wlan.config(pm=network.WLAN.PM_NONE)
         # determine local MAC address ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _local_mac_bytes = self._wlan.config('mac')
         self._local_mac_str = ubinascii.hexlify(_local_mac_bytes, ':').decode('utf-8')

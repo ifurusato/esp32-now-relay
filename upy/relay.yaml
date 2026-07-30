@@ -101,6 +101,6 @@ rros:
             - id:            "n11"
               name:          "Node 11 - Radiozoa WeAct ESP32-S3"
               mac:           "10:20:ba:08:b7:84"
-              enabled:       False
+              enabled:       True
 
 #EOF
