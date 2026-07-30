@@ -4,7 +4,7 @@
 
 rros:
     touch_pad_app:
-        use_explorer:       True       # if True, use UM Explorer shield rather than TouchPad
+        use_explorer:      False       # if True, use UM Explorer shield rather than TouchPad
     gateway:
         verbose:           False
     initiator:
@@ -27,7 +27,7 @@ rros:
         verbose:            True
         scl_pin:              22
         sda_pin:              21
-        use_mpr121:         True       # if True, assume UM Explorer with touch chip
+        use_mpr121:        False       # if True, assume UM Explorer with touch chip
         poll_interval_ms:     50
         debounce_delay_ms:   333
     relay:
@@ -45,21 +45,21 @@ rros:
 #             device:        # optional: only necessary when device type cannot be inferred from machine identifier
 #             enabled:       # if False do not include this device in the relay chain
 
-#           - id:            "n1"
-#             name:          "Node 1 - ESP32-S3 Super Mini"
-#             mac:           "e0:72:a1:e8:b9:54"
-#             device:        "super-mini"
-#             enabled:       False
+            - id:            "n1"
+              name:          "Node 1 - ESP32-S3 Super Mini"
+              mac:           "e0:72:a1:e8:b9:54"
+              device:        "super-mini"
+              enabled:       True
 
 #           - id:            "n2"
 #             name:          "Node 2 - TinyPICO light green" # USB Micro-B
 #             mac:           "24:a1:60:75:ba:84"
 #             enabled:       False
 
-            - id:            "n3"
-              name:          "Node 3 - Explorer TinyPICO" # green, USB-C
-              mac:           "64:b7:08:90:5c:c4"
-              enabled:       True
+#           - id:            "n3"
+#             name:          "Node 3 - Explorer TinyPICO" # green, USB-C
+#             mac:           "64:b7:08:90:5c:c4"
+#             enabled:       False
 
 #           - id:            "n4"
 #             name:          "Node 4 - Waveshare ESP32-S3 Zero"
@@ -101,6 +101,6 @@ rros:
             - id:            "n11"
               name:          "Node 11 - Radiozoa WeAct ESP32-S3"
               mac:           "10:20:ba:08:b7:84"
-              enabled:       True
+              enabled:       False
 
 #EOF
